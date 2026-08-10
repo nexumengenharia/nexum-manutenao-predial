@@ -3,9 +3,11 @@
 @tailwind utilities;
 
 :root { color-scheme: light; }
+.dark { color-scheme: dark; }
 
 html { -webkit-text-size-adjust: 100%; }
-body { @apply bg-slate-100 text-slate-800 antialiased; }
+body { @apply bg-slate-100 text-slate-800 antialiased transition-colors; }
+.dark body { @apply bg-slate-900 text-slate-200; }
 
 /* Acessibilidade: foco sempre visivel (eMAG 3.1 / WCAG 2.4.7) */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
@@ -17,6 +19,57 @@ body { @apply bg-slate-100 text-slate-800 antialiased; }
 .pular-para-conteudo {
   @apply absolute left-2 -top-20 z-50 rounded bg-marinho-700 px-4 py-2 text-white focus:top-2;
 }
+
+/* ---------------------------------------------------------------------------
+   Tema escuro. As paginas foram escritas com utilitarios claros fixos
+   (bg-white, text-slate-800...). Reescrever cada uma seria arriscado e longo,
+   entao o tema escuro remapeia essas mesmas classes dentro de .dark. E uma
+   troca de paleta, nao um redesenho: contraste continua acima de 4.5:1.
+--------------------------------------------------------------------------- */
+.dark .bg-white { background-color: #16202f !important; }
+.dark .bg-slate-50 { background-color: #1b2738 !important; }
+.dark .bg-slate-100 { background-color: #1f2c3f !important; }
+.dark .bg-slate-50\/70 { background-color: #1b2738 !important; }
+.dark .bg-slate-50\/60 { background-color: #1b2738 !important; }
+
+.dark .text-slate-900 { color: #f1f5f9 !important; }
+.dark .text-slate-800 { color: #e2e8f0 !important; }
+.dark .text-slate-700 { color: #cbd5e1 !important; }
+.dark .text-slate-600 { color: #b6c2d1 !important; }
+.dark .text-slate-500 { color: #9aa8b8 !important; }
+.dark .text-slate-400 { color: #8593a3 !important; }
+.dark .text-marinho-900,
+.dark .text-marinho-800,
+.dark .text-marinho-700 { color: #9ec1ea !important; }
+
+.dark .border-slate-200 { border-color: #2b3a4f !important; }
+.dark .border-slate-300 { border-color: #35465e !important; }
+.dark .border-slate-100 { border-color: #24324a !important; }
+.dark .divide-slate-100 > * + * { border-color: #24324a !important; }
+
+.dark input, .dark select, .dark textarea {
+  background-color: #101a27 !important;
+  color: #e2e8f0 !important;
+  border-color: #35465e !important;
+}
+.dark input::placeholder, .dark textarea::placeholder { color: #7f8da8 !important; }
+
+.dark .shadow-sm, .dark .shadow-md { box-shadow: 0 1px 3px rgba(0,0,0,.45) !important; }
+
+/* Selos e faixas coloridas: mantem o matiz, escurece o fundo para nao
+   estourar o brilho no tema escuro. */
+.dark [class*="bg-sky-100"], .dark [class*="bg-emerald-100"],
+.dark [class*="bg-amber-100"], .dark [class*="bg-red-100"],
+.dark [class*="bg-indigo-100"], .dark [class*="bg-violet-100"],
+.dark [class*="bg-teal-100"], .dark [class*="bg-rose-100"],
+.dark [class*="bg-cyan-100"], .dark [class*="bg-orange-100"],
+.dark [class*="bg-slate-200"] { filter: brightness(.42) saturate(1.5); }
+.dark [class*="bg-sky-100"] *, .dark [class*="bg-emerald-100"] *,
+.dark [class*="bg-amber-100"] *, .dark [class*="bg-red-100"] *,
+.dark [class*="bg-indigo-100"] *, .dark [class*="bg-violet-100"] *,
+.dark [class*="bg-teal-100"] *, .dark [class*="bg-rose-100"] *,
+.dark [class*="bg-cyan-100"] *, .dark [class*="bg-orange-100"] *,
+.dark [class*="bg-slate-200"] * { filter: brightness(2.2); }
 
 @media print {
   .nao-imprimir { display: none !important; }

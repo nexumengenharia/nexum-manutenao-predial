@@ -6,11 +6,15 @@ import { brl, num, rotulo } from "@/lib/fmt";
 import { Titulo, Painel } from "@/components/ui";
 import { IconePredio, CORES_PREDIO } from "@/components/icones";
 import Mapa from "@/components/mapa";
+import Cadastro from "@/components/cadastro";
+import { CAMPOS_PREDIO } from "@/components/campos";
+import { pode } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function Predios() {
   const ctx = await contexto();
+  const podeEditar = pode(ctx.sessao.papel, "cadastro.editar");
   const [predios, veiculos] = await Promise.all([
     consultar(ctx, `
       select v.*, p.endereco, p.cidade, p.uf, p.area_m2, p.pavimentos,
@@ -57,10 +61,17 @@ export default async function Predios() {
     <div className="space-y-5">
       <Titulo titulo="Prédios e setores"
         sub={`${predios.length} imóvel(is) sob responsabilidade de manutenção${veiculos.length ? ` e ${veiculos.length} veículo(s) monitorado(s)` : ""}.`}
-        acao={<Link href="/frota/monitoramento"
-          className="rounded-md bg-marinho-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-marinho-800">
-          Monitoramento da frota
-        </Link>} />
+        acao={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/frota/monitoramento"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white">
+              Monitoramento da frota
+            </Link>
+            {podeEditar && (
+              <Cadastro entidade="predio" titulo="Prédio" campos={CAMPOS_PREDIO} />
+            )}
+          </div>
+        } />
 
       <Painel titulo="Mapa das unidades"
         acao={<span className="text-[11px] text-slate-500">Clique no marcador para ver o resumo</span>}>

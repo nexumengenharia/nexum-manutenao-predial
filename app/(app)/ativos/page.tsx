@@ -4,6 +4,9 @@ import { consultar } from "@/lib/db";
 import { brl, num, data, rotulo } from "@/lib/fmt";
 import { Titulo, Selo } from "@/components/ui";
 import { IconeCategoria, catCor, CORES_CATEGORIA } from "@/components/icones";
+import Cadastro from "@/components/cadastro";
+import { camposAtivo } from "@/components/campos";
+import { pode } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +76,7 @@ export default async function Ativos({ searchParams }: { searchParams: Promise<a
     <div className="space-y-5">
       <Titulo titulo="Ativos" sub={`${linhas.length} equipamento(s) sob gestão.`}
         acao={
-          <div className="flex gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {[["categoria","Por categoria"],["predio","Por prédio"]].map(([k,l]) => (
               <Link key={k} href={qs({ agrupar: k })}
                 className={`rounded px-3 py-1.5 text-xs font-medium transition
@@ -81,6 +84,12 @@ export default async function Ativos({ searchParams }: { searchParams: Promise<a
                 {l}
               </Link>
             ))}
+            {pode(ctx.sessao.papel, "cadastro.editar") && (
+              <span className="ml-1">
+                <Cadastro entidade="ativo" titulo="Ativo"
+                  campos={camposAtivo(predios as { id: string; nome: string }[])} />
+              </span>
+            )}
           </div>
         } />
 

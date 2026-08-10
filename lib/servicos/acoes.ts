@@ -308,3 +308,121 @@ export async function abrirChamadoPontoPublico(
     return { id: rows[0].id, numero: rows[0].numero, equipe: eq[0]?.nome ?? "Equipe responsável" };
   });
 }
+
+/* ===========================================================================
+   CADASTROS BASE (predio, ativo, contratada, controle, veiculo, equipe...)
+
+   Sem estes cadastros o sistema so consegue LER a massa de demonstracao: nao
+   ha como o orgao registrar o proprio patrimonio. Os indicadores do painel
+   (custo por predio, ativo que mais consome, vencimentos, carga por equipe)
+   dependem inteiramente destas tabelas estarem preenchidas com dado real.
+
+   O nome da tabela e o nome de cada coluna NUNCA vem do cliente: vem deste
+   mapa. O que chega da requisicao e so o VALOR, sempre por parametro ($n).
+   Isso fecha a porta de injecao que um "upsert generico" normalmente abre.
+=========================================================================== */
+
+type Tipo = "texto" | "num" | "int" | "data" | "bool" | "uuid";
+type Def = {
+  tabela: string;
+  colunas: { n: string; t: Tipo }[];
+  obrigatorias: string[];
+  rotulo: string;
+};
+
+export const CADASTROS: Record<string, Def> = {
+  predio: {
+    tabela: "predio", rotulo: "Prédio",
+    obrigatorias: ["nome", "codigo", "endereco"],
+    colunas: [
+      { n: "nome", t: "texto" }, { n: "codigo", t: "texto" }, { n: "endereco", t: "texto" },
+      { n: "tipo", t: "texto" }, { n: "cidade", t: "texto" }, { n: "uf", t: "texto" },
+      { n: "pavimentos", t: "int" }, { n: "area_m2", t: "num" },
+      { n: "latitude", t: "num" }, { n: "longitude", t: "num" }, { n: "ativo", t: "bool" },
+    ],
+  },
+  ativo: {
+    tabela: "ativo", rotulo: "Ativo",
+    obrigatorias: ["nome", "codigo", "predio_id"],
+    colunas: [
+      { n: "predio_id", t: "uuid" }, { n: "setor_id", t: "uuid" },
+      { n: "nome", t: "texto" }, { n: "codigo", t: "texto" }, { n: "tombamento", t: "texto" },
+      { n: "categoria", t: "texto" }, { n: "situacao", t: "texto" }, { n: "criticidade", t: "texto" },
+      { n: "pavimento", t: "texto" }, { n: "localizacao", t: "texto" },
+      { n: "fabricante", t: "texto" }, { n: "modelo", t: "texto" }, { n: "numero_serie", t: "texto" },
+      { n: "data_aquisicao", t: "data" }, { n: "valor_aquisicao", t: "num" },
+      { n: "garantia_ate", t: "data" }, { n: "observacoes", t: "texto" },
+    ],
+  },
+  contratada: {
+    tabela: "contratada", rotulo: "Contratada",
+    obrigatorias: ["razao_social", "cnpj"],
+    colunas: [
+      { n: "razao_social", t: "texto" }, { n: "cnpj", t: "texto" },
+      { n: "especialidade", t: "texto" }, { n: "telefone", t: "texto" },
+      { n: "email", t: "texto" }, { n: "responsavel", t: "texto" },
+      { n: "numero_contrato", t: "texto" }, { n: "contrato_inicio", t: "data" },
+      { n: "contrato_fim", t: "data" }, { n: "valor_contrato", t: "num" },
+      { n: "avaliacao", t: "num" }, { n: "ativo", t: "bool" },
+    ],
+  },
+};
+
+function coagir(t: Tipo, v: any) {
+  if (v === undefined || v === null || v === "") return null;
+  switch (t) {
+    case "int": { const n = parseInt(String(v), 10); return Number.isFinite(n) ? n : null; }
+    case "num": { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? n : null; }
+    case "bool": return v === true || v === "true" || v === "on" || v === "1";
+    case "data": return String(v).slice(0, 10);
+    case "uuid": return String(v);
+    default: return String(v).trim() || null;
+  }
+}
+
+export async function salvarCadastro(
+  ctx: Contexto, entidade: string, dados: Record<string, any>, id?: string | null,
+) {
+  const def = CADASTROS[entidade];
+  if (!def) throw new Error("Entidade nao permitida.");
+
+  const valores: Record<string, any> = {};
+  for (const col of def.colunas) {
+    if (Object.prototype.hasOwnProperty.call(dados, col.n)) {
+      valores[col.n] = coagir(col.t, dados[col.n]);
+    }
+  }
+  for (const o of def.obrigatorias) {
+    const criando = !id;
+    if ((criando && valores[o] == null) || (!criando && o in valores && valores[o] == null)) {
+      throw new Error(`CAMPO_OBRIGATORIO:${o}`);
+    }
+  }
+
+  const nomes = Object.keys(valores);
+  if (!nomes.length) throw new Error("Nada a salvar.");
+
+  return comContexto(ctx, async (c) => {
+    if (id) {
+      const sets = nomes.map((n, i) => `${n} = $${i + 3}`);
+      sets.push(`atualizado_por = $${nomes.length + 3}`, "atualizado_em = now()");
+      const { rows } = await c.query(
+        `update manutencao.${def.tabela} set ${sets.join(", ")}
+          where tenant_id = $1 and id = $2 and excluido_em is null
+          returning id`,
+        [ctx.tenantId, id, ...nomes.map((n) => valores[n]), ctx.usuarioId || null],
+      );
+      if (!rows[0]) throw new Error(`${def.rotulo} nao encontrado.`);
+      return { id: rows[0].id, criado: false };
+    }
+
+    const cols = ["tenant_id", ...nomes, "criado_por"];
+    const marc = cols.map((_, i) => `$${i + 1}`);
+    const { rows } = await c.query(
+      `insert into manutencao.${def.tabela} (${cols.join(", ")})
+       values (${marc.join(", ")}) returning id`,
+      [ctx.tenantId, ...nomes.map((n) => valores[n]), ctx.usuarioId || null],
+    );
+    return { id: rows[0].id, criado: true };
+  });
+}

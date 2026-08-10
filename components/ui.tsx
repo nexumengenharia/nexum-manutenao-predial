@@ -16,14 +16,17 @@ export function Cartao({ titulo, valor, detalhe, tom = "neutro", href }: {
     alerta: "text-amber-700", critico: "text-red-700",
   } as const;
 
+  /* flex-col + mt-auto no detalhe: sem isso, cards com rotulo de duas linhas
+     empurram o valor para baixo e a fileira inteira fica desalinhada. Agora o
+     valor comeca na mesma altura e o detalhe encosta no rodape do cartao. */
   const conteudo = (
-    <div className={`h-full rounded-lg border-l-4 bg-white p-4 shadow-sm ${tons[tom]}`}>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{titulo}</p>
-      <p className={`mt-1 text-2xl font-semibold tabular-nums ${corValor[tom]}`}>{valor}</p>
-      {detalhe && <p className="mt-1 text-xs text-slate-500">{detalhe}</p>}
+    <div className={`flex h-full flex-col rounded-lg border-l-4 bg-white p-4 shadow-sm ${tons[tom]}`}>
+      <p className="text-xs font-medium uppercase leading-4 tracking-wide text-slate-500">{titulo}</p>
+      <p className={`mt-1 text-xl font-semibold tabular-nums sm:text-2xl ${corValor[tom]}`}>{valor}</p>
+      <p className="mt-auto pt-1 text-xs text-slate-500">{detalhe ?? " "}</p>
     </div>
   );
-  return href ? <Link href={href} className="block">{conteudo}</Link> : conteudo;
+  return href ? <Link href={href} className="block h-full">{conteudo}</Link> : conteudo;
 }
 
 const CORES: Record<string, string> = {
