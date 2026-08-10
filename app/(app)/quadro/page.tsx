@@ -1,0 +1,159 @@
+import Link from "next/link";
+import { contexto } from "@/lib/sessao";
+import { consultar } from "@/lib/db";
+import * as P from "@/lib/servicos/painel";
+import { num, dataHora, rotulo } from "@/lib/fmt";
+import { Titulo, Selo } from "@/components/ui";
+import { CORES_PONTO } from "@/components/icones";
+import Mover from "./mover";
+
+export const dynamic = "force-dynamic";
+
+const COLUNAS = [
+  { k: "ABERTA",      t: "Recebidas",     cor: "border-sky-400",    fundo: "bg-sky-50" },
+  { k: "TRIAGEM",     t: "Em triagem",    cor: "border-violet-400", fundo: "bg-violet-50" },
+  { k: "EM_EXECUCAO", t: "Em execução",   cor: "border-amber-400",  fundo: "bg-amber-50" },
+  { k: "CONCLUIDA",   t: "Concluídas",    cor: "border-emerald-400",fundo: "bg-emerald-50" },
+];
+
+const COR_NAT: Record<string, string> = {
+  LIMPEZA: "#0891b2", MANUTENCAO: "#1e3a5f", SEGURANCA: "#6d28d9",
+  TI: "#334155", JARDINAGEM: "#15803d", FROTA: "#b45309", OUTRO: "#64748b",
+};
+
+export default async function Quadro({ searchParams }: { searchParams: Promise<any> }) {
+  const sp = await searchParams;
+  const ctx = await contexto();
+  const equipeSel = sp.equipe ?? null;
+  const natSel = sp.natureza ?? null;
+
+  const [itens, equipes] = await Promise.all([
+    consultar(ctx, `
+      select s.id, s.numero, s.titulo, s.descricao, s.situacao, s.prioridade, s.natureza,
+             s.solicitante_nome, s.criado_em, s.prazo_em, s.origem, s.atendida_em,
+             s.avaliacao_solicitante,
+             (s.prazo_em < now() and s.situacao not in ('CONCLUIDA','CANCELADA','CONVERTIDA')) as vencida,
+             round(extract(epoch from (now() - s.criado_em))/3600.0) as horas_aberta,
+             p.nome as predio, pt.nome as ponto, pt.tipo as ponto_tipo, e.nome as equipe, e.id as equipe_id
+        from manutencao.solicitacao s
+        left join manutencao.predio p on p.id = s.predio_id
+        left join manutencao.ponto pt on pt.id = s.ponto_id
+        left join manutencao.equipe e on e.id = s.equipe_id
+       where s.excluido_em is null
+         and s.criado_em >= now() - interval '60 days'
+         and ($1::uuid is null or s.equipe_id = $1::uuid)
+         and ($2::text is null or s.natureza = $2::text)
+       order by (s.prazo_em < now()) desc,
+                array_position(array['URGENTE','ALTA','MEDIA','BAIXA'], s.prioridade),
+                s.criado_em asc`, [equipeSel, natSel]),
+    P.cargaPorEquipe(ctx),
+  ]);
+
+  const porCol = (k: string) => itens.filter((i: any) => i.situacao === k);
+  const naturezas = [...new Set(itens.map((i: any) => i.natureza))] as string[];
+
+  return (
+    <div className="space-y-5">
+      <Titulo titulo="Quadro de atividades"
+        sub="Chamados abertos pelos usuários dos prédios, roteados por natureza para a equipe responsável." />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/quadro"
+          className={`rounded-full px-3 py-1.5 text-xs font-medium transition
+            ${!equipeSel && !natSel ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
+          Todas as equipes
+        </Link>
+        {equipes.map((e: any) => (
+          <Link key={e.id} href={`/quadro?equipe=${e.id}`}
+            className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition
+              ${equipeSel === e.id ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
+            <span aria-hidden className="h-2 w-2 rounded-full"
+                  style={{ background: COR_NAT[e.natureza] ?? "#64748b" }} />
+            {e.nome}
+            <span className={`rounded-full px-1.5 text-[10px] font-bold tabular-nums
+              ${Number(e.vencidas) > 0 ? "bg-red-500 text-white" : equipeSel === e.id ? "bg-white/20" : "bg-slate-100"}`}>
+              {num(e.fila)}
+            </span>
+          </Link>
+        ))}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {COLUNAS.map((col) => {
+          const lista = porCol(col.k);
+          const atrasadas = lista.filter((i: any) => i.vencida).length;
+          return (
+            <section key={col.k} className={`rounded-xl border-t-4 ${col.cor} bg-slate-50/70 p-3`}>
+              <header className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-700">{col.t}</h2>
+                <div className="flex items-center gap-1.5">
+                  {atrasadas > 0 && (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                      {atrasadas} fora do prazo
+                    </span>
+                  )}
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold tabular-nums text-slate-700 ring-1 ring-slate-200">
+                    {lista.length}
+                  </span>
+                </div>
+              </header>
+
+              <ul className="space-y-2">
+                {lista.slice(0, 25).map((s: any) => (
+                  <li key={s.id}
+                      className={`rounded-lg border bg-white p-3 shadow-sm transition hover:shadow-md
+                        ${s.vencida ? "border-l-4 border-l-red-500 border-slate-200" : "border-slate-200"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-mono text-[10px] text-slate-400">{s.numero}</span>
+                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                            style={{ background: COR_NAT[s.natureza] ?? "#64748b" }}>
+                        {rotulo(s.natureza)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm font-medium leading-snug text-slate-800">{s.titulo}</p>
+                    {s.ponto && (
+                      <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <span aria-hidden className="h-1.5 w-1.5 rounded-full"
+                              style={{ background: CORES_PONTO[s.ponto_tipo] ?? "#64748b" }} />
+                        {s.ponto}
+                      </p>
+                    )}
+                    <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                      {s.predio} · {s.solicitante_nome}
+                      {s.origem === "QRCODE" && <span className="ml-1 font-medium text-marinho-600">QR</span>}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <Selo v={s.prioridade} />
+                      <span className={`text-[10px] font-medium tabular-nums
+                        ${s.vencida ? "text-red-600" : "text-slate-400"}`}>
+                        {num(s.horas_aberta)} h aberta
+                      </span>
+                    </div>
+                    {s.situacao !== "CONCLUIDA" && (
+                      <Mover id={s.id} situacao={s.situacao} />
+                    )}
+                    {s.avaliacao_solicitante && (
+                      <p className="mt-1.5 text-[10px] text-emerald-600">
+                        {"★".repeat(Number(s.avaliacao_solicitante))} avaliação do solicitante
+                      </p>
+                    )}
+                  </li>
+                ))}
+                {lista.length === 0 && (
+                  <li className="rounded-lg border border-dashed border-slate-300 py-8 text-center text-xs text-slate-400">
+                    Nenhum chamado
+                  </li>
+                )}
+                {lista.length > 25 && (
+                  <li className="py-2 text-center text-xs text-slate-500">
+                    + {lista.length - 25} não exibidos
+                  </li>
+                )}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

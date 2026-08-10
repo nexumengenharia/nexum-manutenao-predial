@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+
+html { -webkit-text-size-adjust: 100%; }
+body { @apply bg-slate-100 text-slate-800 antialiased; }
+
+/* Acessibilidade: foco sempre visivel (eMAG 3.1 / WCAG 2.4.7) */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #b8860b;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.pular-para-conteudo {
+  @apply absolute left-2 -top-20 z-50 rounded bg-marinho-700 px-4 py-2 text-white focus:top-2;
+}
+
+@media print {
+  .nao-imprimir { display: none !important; }
+  body { @apply bg-white; }
+}
