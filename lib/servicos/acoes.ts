@@ -258,3 +258,53 @@ export async function abrirChamadoPublico(
     return rows[0] as { id: string; numero: string };
   });
 }
+
+/* -------------------------------------------------------------------------
+   Abertura publica de chamado por QR de PONTO de servico (corredor, banheiro,
+   copa etc). Diferente do chamado por ativo, aqui quem relata escolhe a
+   natureza (limpeza/manutencao/seguranca) na propria tela, e o chamado e
+   roteado automaticamente para a equipe daquela natureza no tenant do ponto.
+------------------------------------------------------------------------- */
+export async function pontoPorTokenPublico(codigo: string) {
+  return semContexto(async (c) => {
+    const { rows } = await c.query(
+      `select pt.id, pt.tenant_id, pt.nome, pt.tipo, pt.pavimento, pt.localizacao,
+              pt.codigo, pt.predio_id, pt.setor_id,
+              pr.nome as predio, s.nome as setor, t.sigla, t.nome as tribunal_nome
+         from manutencao.ponto pt
+         join manutencao.tribunal t on t.id = pt.tenant_id
+         left join manutencao.predio pr on pr.id = pt.predio_id
+         left join manutencao.setor s on s.id = pt.setor_id
+        where pt.codigo_publico = $1 and pt.excluido_em is null and pt.ativo`,
+      [codigo.toUpperCase()]);
+    return rows[0] ?? null;
+  });
+}
+
+export async function abrirChamadoPontoPublico(
+  codigo: string,
+  d: { natureza: string; titulo: string; descricao?: string; solicitante?: string; contato?: string; prioridade?: string },
+) {
+  const ponto = await pontoPorTokenPublico(codigo);
+  if (!ponto) throw new Error("Ponto nao localizado.");
+
+  const ctx: Contexto = { tenantId: ponto.tenant_id, usuarioId: null, ip: null };
+  return comContexto(ctx, async (c) => {
+    const numero = await proximoNumero(c, ponto.tenant_id, "solicitacao", "SOL");
+    const { rows: eq } = await c.query(
+      `select e.id, e.nome from manutencao.equipe e
+        where e.tenant_id=$1 and e.natureza=$2 and e.ativo limit 1`,
+      [ponto.tenant_id, d.natureza]);
+    const equipeId = eq[0]?.id ?? null;
+    const { rows } = await c.query(
+      `insert into manutencao.solicitacao
+         (tenant_id, predio_id, setor_id, ponto_id, equipe_id, natureza, numero, titulo,
+          descricao, prioridade, solicitante_nome, solicitante_contato, origem, localizacao)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'QRCODE',$13)
+       returning id, numero`,
+      [ponto.tenant_id, ponto.predio_id, ponto.setor_id, ponto.id, equipeId, d.natureza, numero,
+       d.titulo, d.descricao || null, d.prioridade || "MEDIA",
+       d.solicitante || "Usuário do prédio", d.contato || null, ponto.localizacao]);
+    return { id: rows[0].id, numero: rows[0].numero, equipe: eq[0]?.nome ?? "Equipe responsável" };
+  });
+}
