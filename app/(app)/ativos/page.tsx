@@ -46,7 +46,7 @@ export default async function Ativos({ searchParams }: { searchParams: Promise<a
         left join manutencao.predio p on p.id = a.predio_id
         left join manutencao.setor s on s.id = a.setor_id
         left join manutencao.vw_indicador_ativo i on i.ativo_id = a.id
-       where a.excluido_em is null
+       where a.excluido_em is null and a.tenant_id = manutencao.tenant_atual()
          and ($1 = '' or a.nome ilike '%'||$1||'%' or a.codigo ilike '%'||$1||'%'
               or a.tombamento ilike '%'||$1||'%')
          and ($2::text is null or a.categoria = $2::text)
@@ -54,8 +54,10 @@ export default async function Ativos({ searchParams }: { searchParams: Promise<a
          and ($4::text is null or a.situacao = $4::text)
        order by a.categoria, a.nome`, [busca, cat, predio, situacao]),
     consultar(ctx, `select categoria, count(*)::int as total from manutencao.ativo
-                     where excluido_em is null group by 1 order by 2 desc`),
-    consultar(ctx, `select id, nome from manutencao.predio where excluido_em is null order by nome`),
+                     where excluido_em is null and tenant_id = manutencao.tenant_atual()
+                     group by 1 order by 2 desc`),
+    consultar(ctx, `select id, nome from manutencao.predio
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
   ]);
 
   const grupos = new Map<string, any[]>();

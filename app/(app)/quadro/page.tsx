@@ -39,7 +39,7 @@ export default async function Quadro({ searchParams }: { searchParams: Promise<a
         left join manutencao.predio p on p.id = s.predio_id
         left join manutencao.ponto pt on pt.id = s.ponto_id
         left join manutencao.equipe e on e.id = s.equipe_id
-       where s.excluido_em is null
+       where s.excluido_em is null and s.tenant_id = manutencao.tenant_atual()
          and s.criado_em >= now() - interval '60 days'
          and ($1::uuid is null or s.equipe_id = $1::uuid)
          and ($2::text is null or s.natureza = $2::text)

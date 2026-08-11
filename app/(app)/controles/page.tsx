@@ -39,16 +39,18 @@ export default async function Controles({ searchParams }: { searchParams: Promis
         left join manutencao.veiculo v on v.id = c.veiculo_id
         left join manutencao.contratada ct on ct.id = c.contratada_id
         left join manutencao.predio p on p.id = c.predio_id
-       where c.excluido_em is null
+       where c.excluido_em is null and c.tenant_id = manutencao.tenant_atual()
          and ($1::text is null or c.situacao = $1::text)
          and ($2::text is null or c.tipo = $2::text)
        order by c.proxima_data asc`, [sit, tipo]),
     consultar(ctx, `select situacao, count(*)::int as total,
                            coalesce(sum(custo_previsto),0) as custo
-                      from manutencao.controle where excluido_em is null
+                      from manutencao.controle
+                     where excluido_em is null and tenant_id = manutencao.tenant_atual()
                      group by 1`),
     consultar(ctx, `select tipo, count(*)::int as total from manutencao.controle
-                     where excluido_em is null group by 1 order by 2 desc`),
+                     where excluido_em is null and tenant_id = manutencao.tenant_atual()
+                     group by 1 order by 2 desc`),
   ]);
 
   const porSit = (k: string) => Number(resumo.find((r: any) => r.situacao === k)?.total ?? 0);

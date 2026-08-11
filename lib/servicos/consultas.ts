@@ -95,7 +95,13 @@ export const alertas = (ctx: Contexto) => consultar(ctx, `
     order by proxima_execucao limit 5)
 `, [ctx.tenantId]);
 
-export type FiltroOrdem = { situacao?: string; tipo?: string; prioridade?: string; busca?: string };
+/* predio/atraso/mes existiam como link no painel mas nao como filtro aqui: a
+   tela abria mostrando TODAS as ordens, o que e pior que um erro — o gestor le
+   um numero achando que e o recorte em que clicou. */
+export type FiltroOrdem = {
+  situacao?: string; tipo?: string; prioridade?: string; busca?: string;
+  predio?: string; atraso?: boolean; mes?: string;
+};
 
 export const listarOrdens = (ctx: Contexto, f: FiltroOrdem = {}, limite = 100) => consultar(ctx, `
   select o.id, o.numero, o.titulo, o.tipo, o.situacao, o.prioridade,
@@ -114,9 +120,14 @@ export const listarOrdens = (ctx: Contexto, f: FiltroOrdem = {}, limite = 100) =
      and ($3::text is null or o.tipo       = $3)
      and ($4::text is null or o.prioridade = $4)
      and ($5::text is null or o.numero ilike '%'||$5||'%' or o.titulo ilike '%'||$5||'%')
+     and ($6::uuid is null or o.predio_id  = $6::uuid)
+     and ($7::boolean is not true or v.atrasada)
+     and ($8::text is null
+          or date_trunc('month', coalesce(o.concluida_em, o.aberta_em)) = ($8 || '-01')::date)
    order by o.aberta_em desc
-   limit $6`,
-  [ctx.tenantId, f.situacao || null, f.tipo || null, f.prioridade || null, f.busca || null, limite]);
+   limit $9`,
+  [ctx.tenantId, f.situacao || null, f.tipo || null, f.prioridade || null, f.busca || null,
+   f.predio || null, f.atraso === true, f.mes || null, limite]);
 
 export const obterOrdem = (ctx: Contexto, id: string) => consultarUm(ctx, `
   select o.*, p.nome as predio, s.nome as setor, s.centro_custo,

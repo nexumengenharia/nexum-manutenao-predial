@@ -41,20 +41,26 @@ export default async function Frota() {
        from manutencao.veiculo v
        left join manutencao.predio p on p.id = v.predio_id
        left join manutencao.usuario u on u.id = v.condutor_padrao_id
-      where v.excluido_em is null
+      where v.excluido_em is null and v.tenant_id = manutencao.tenant_atual()
       order by v.placa`),
     consultar(ctx, `
       select
-        (select count(*) from manutencao.veiculo where excluido_em is null)                as total,
         (select count(*) from manutencao.veiculo where excluido_em is null
+          and tenant_id = manutencao.tenant_atual())                                                              as total,
+        (select count(*) from manutencao.veiculo where excluido_em is null
+          and tenant_id = manutencao.tenant_atual()
           and situacao = 'EM_MANUTENCAO')                                                  as manutencao,
         (select coalesce(sum(valor_total),0) from manutencao.abastecimento
-          where excluido_em is null and ocorrido_em >= date_trunc('year', now()))          as combustivel_ano,
+          where excluido_em is null and tenant_id = manutencao.tenant_atual()
+            and ocorrido_em >= date_trunc('year', now()))                                  as combustivel_ano,
         (select coalesce(sum(litros),0) from manutencao.abastecimento
-          where excluido_em is null and ocorrido_em >= date_trunc('year', now()))          as litros_ano,
-        (select count(*) from manutencao.multa where excluido_em is null and situacao='ABERTA') as multas,
+          where excluido_em is null and tenant_id = manutencao.tenant_atual()
+            and ocorrido_em >= date_trunc('year', now()))                                  as litros_ano,
+        (select count(*) from manutencao.multa where excluido_em is null
+          and tenant_id = manutencao.tenant_atual() and situacao='ABERTA')                                        as multas,
         (select coalesce(sum(valor),0) from manutencao.multa
-          where excluido_em is null and situacao='ABERTA')                                 as valor_multas`),
+          where excluido_em is null and tenant_id = manutencao.tenant_atual()
+            and situacao='ABERTA')                                                         as valor_multas`),
   ]);
 
   const r: any = resumo[0] ?? {};

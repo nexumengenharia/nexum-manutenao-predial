@@ -27,12 +27,14 @@ export default async function Predios() {
                  and so.situacao in ('ABERTA','TRIAGEM','EM_EXECUCAO'))        as chamados
         from manutencao.vw_indicador_predio v
         join manutencao.predio p on p.id = v.predio_id
+       where v.tenant_id = manutencao.tenant_atual()
        order by v.custo_total desc`),
     consultar(ctx, `
       select id, placa, modelo, situacao, ultima_latitude, ultima_longitude,
              ultima_velocidade, ultima_posicao_em
         from manutencao.veiculo
-       where excluido_em is null and ultima_latitude is not null`),
+       where excluido_em is null and ultima_latitude is not null
+         and tenant_id = manutencao.tenant_atual()`),
   ]);
 
   const marcadores = [

@@ -15,14 +15,30 @@ const OPCOES = {
 export default async function Ordens({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const ctx = await contexto();
+  const predioValido = typeof sp.predio === "string" && /^[0-9a-f-]{36}$/i.test(sp.predio) ? sp.predio : undefined;
+  const mesValido = typeof sp.mes === "string" && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : undefined;
+  const soAtrasadas = sp.atraso === "1";
+
   const lista = await q.listarOrdens(ctx, {
     situacao: sp.situacao, tipo: sp.tipo, prioridade: sp.prioridade, busca: sp.busca,
+    predio: predioValido, mes: mesValido, atraso: soAtrasadas,
   });
+
+  const recortes = [
+    soAtrasadas ? "somente atrasadas" : null,
+    mesValido ? `competência ${mesValido}` : null,
+    predioValido ? "prédio selecionado" : null,
+  ].filter(Boolean);
 
   return (
     <>
       <Titulo titulo="Ordens de serviço"
-              sub={`${lista.length} ordens listadas — ${ctx.sessao.tribunal}`} />
+              sub={`${lista.length} ordens listadas${recortes.length ? ` · ${recortes.join(" · ")}` : ""} — ${ctx.sessao.tribunal}`}
+              acao={recortes.length ? (
+                <Link href="/ordens" className="rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-white">
+                  Remover recortes
+                </Link>
+              ) : undefined} />
 
       <form className="nao-imprimir mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3">
         <div>

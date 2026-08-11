@@ -20,34 +20,37 @@ export default async function Veiculo({ params }: { params: Promise<{ id: string
       left join manutencao.predio p on p.id = v.predio_id
       left join manutencao.setor s on s.id = v.setor_id
       left join manutencao.usuario u on u.id = v.condutor_padrao_id
-     where v.id = $1 and v.excluido_em is null`, [id]);
+     where v.id = $1 and v.excluido_em is null and v.tenant_id = manutencao.tenant_atual()`, [id]);
   if (!v) notFound();
 
   const [abast, prev, docs, insp, multas, trajeto, ordens] = await Promise.all([
     consultar(ctx, `select * from manutencao.abastecimento
-                     where veiculo_id = $1 and excluido_em is null
+                     where veiculo_id = $1 and excluido_em is null and tenant_id = manutencao.tenant_atual()
                      order by ocorrido_em desc limit 20`, [id]),
     consultar(ctx, `select *, (proxima_km - $2::numeric) as km_faltando
                       from manutencao.veiculo_preventiva
                      where veiculo_id = $1 and excluido_em is null and ativo
+                       and tenant_id = manutencao.tenant_atual()
                      order by (proxima_km - $2::numeric) asc`, [id, v.hodometro]),
     consultar(ctx, `select *, (proxima_data - current_date) as dias
                       from manutencao.controle
-                     where veiculo_id = $1 and excluido_em is null
+                     where veiculo_id = $1 and excluido_em is null and tenant_id = manutencao.tenant_atual()
                      order by proxima_data asc`, [id]),
     consultar(ctx, `select i.*, u.nome as inspetor from manutencao.veiculo_inspecao i
                      left join manutencao.usuario u on u.id = i.inspetor_id
-                    where i.veiculo_id = $1 and i.excluido_em is null
+                    where i.veiculo_id = $1 and i.excluido_em is null and i.tenant_id = manutencao.tenant_atual()
                     order by i.ocorrido_em desc limit 8`, [id]),
     consultar(ctx, `select * from manutencao.multa where veiculo_id = $1 and excluido_em is null
+                       and tenant_id = manutencao.tenant_atual()
                     order by ocorrido_em desc`, [id]),
     consultar(ctx, `select latitude, longitude, ocorrido_em, velocidade
                       from manutencao.veiculo_posicao
-                     where veiculo_id = $1 and ocorrido_em >= now() - interval '6 hours'
+                     where veiculo_id = $1 and tenant_id = manutencao.tenant_atual()
+                       and ocorrido_em >= now() - interval '6 hours'
                      order by ocorrido_em`, [id]),
     consultar(ctx, `select o.id, o.numero, o.titulo, o.tipo, o.situacao, o.custo_real, o.aberta_em
                       from manutencao.ordem o
-                     where o.excluido_em is null and o.ativo_id = $1
+                     where o.excluido_em is null and o.tenant_id = manutencao.tenant_atual() and o.ativo_id = $1
                      order by o.aberta_em desc limit 10`, [v.ativo_id ?? id]),
   ]);
 

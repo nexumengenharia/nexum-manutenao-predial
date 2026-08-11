@@ -28,12 +28,14 @@ export default async function Pontos({ searchParams }: { searchParams: Promise<a
         from manutencao.ponto pt
         left join manutencao.predio p on p.id = pt.predio_id
         left join manutencao.setor s on s.id = pt.setor_id
-       where pt.excluido_em is null
+       where pt.excluido_em is null and pt.tenant_id = manutencao.tenant_atual()
          and ($1::uuid is null or pt.predio_id = $1::uuid)
        order by p.nome, pt.tipo, pt.nome`, [predioSel]),
-    consultar(ctx, `select id, nome from manutencao.predio where excluido_em is null order by nome`),
+    consultar(ctx, `select id, nome from manutencao.predio
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
     consultar(ctx, `select tipo, count(*)::int as total from manutencao.ponto
-                     where excluido_em is null group by 1 order by 2 desc`),
+                     where excluido_em is null and tenant_id = manutencao.tenant_atual()
+                     group by 1 order by 2 desc`),
   ]);
 
   const comChamado = (pontos as any[]).filter((p) => Number(p.abertos) > 0).length;
