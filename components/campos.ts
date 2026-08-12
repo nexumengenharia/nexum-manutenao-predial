@@ -52,6 +52,20 @@ export const camposAtivo = (predios: { id: string; nome: string }[]): CampoDef[]
   { nome: "observacoes", rotulo: "Observações", tipo: "area" },
 ];
 
+export const camposItemEstoque = (predios: { id: string; nome: string }[]): CampoDef[] => [
+  { nome: "codigo", rotulo: "Código", obrigatorio: true, ajuda: "Único no almoxarifado" },
+  { nome: "nome", rotulo: "Nome do item", obrigatorio: true, largura: "cheia" },
+  { nome: "categoria", rotulo: "Categoria", ajuda: "Ex.: elétrica, hidráulica, EPI" },
+  { nome: "unidade", rotulo: "Unidade", obrigatorio: true, ajuda: "Ex.: UN, CX, M, L, KG", padrao: "UN" },
+  { nome: "predio_id", rotulo: "Prédio / almoxarifado", tipo: "selecao",
+    opcoes: predios.map((p) => ({ v: p.id, t: p.nome })) },
+  { nome: "localizacao", rotulo: "Localização", ajuda: "Ex.: prateleira B3" },
+  { nome: "quantidade", rotulo: "Quantidade inicial", tipo: "numero", padrao: "0" },
+  { nome: "quantidade_minima", rotulo: "Quantidade mínima", tipo: "numero",
+    ajuda: "Abaixo disso o item entra em nível crítico" },
+  { nome: "custo_unitario", rotulo: "Custo unitário (R$)", tipo: "numero" },
+];
+
 export const CAMPOS_CONTRATADA: CampoDef[] = [
   { nome: "razao_social", rotulo: "Razão social", obrigatorio: true, largura: "cheia" },
   { nome: "cnpj", rotulo: "CNPJ", obrigatorio: true },

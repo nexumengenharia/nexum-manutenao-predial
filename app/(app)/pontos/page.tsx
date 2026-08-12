@@ -126,10 +126,16 @@ export default async function Pontos({ searchParams }: { searchParams: Promise<a
                   <p>{num(p.chamados)} chamado(s) no histórico</p>
                   {p.ultimo_chamado && <p className="text-slate-400">último {dataHora(p.ultimo_chamado)}</p>}
                 </div>
-                <a href={`/ponto/${p.codigo_publico}`} target="_blank" rel="noopener"
-                  className="shrink-0 rounded-md bg-marinho-700 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-marinho-800">
-                  Abrir QR
-                </a>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Link href={`/solicitacoes?ponto=${p.id}`}
+                    className="rounded-md border border-slate-300 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-white">
+                    Histórico
+                  </Link>
+                  <a href={`/ponto/${p.codigo_publico}`} target="_blank" rel="noopener"
+                    className="rounded-md bg-marinho-700 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-marinho-800">
+                    Abrir QR
+                  </a>
+                </div>
               </div>
             </article>
           );

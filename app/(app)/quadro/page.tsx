@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { contexto } from "@/lib/sessao";
 import { consultar } from "@/lib/db";
-import * as P from "@/lib/servicos/painel";
 import { num, dataHora, rotulo } from "@/lib/fmt";
-import { Titulo, Selo } from "@/components/ui";
+import { Titulo, Selo, Painel } from "@/components/ui";
 import { CORES_PONTO } from "@/components/icones";
+import { Empilhada, BarrasNav } from "@/components/graficos";
 import Mover from "./mover";
+import NovaSolicitacao from "./nova";
 
 export const dynamic = "force-dynamic";
 
@@ -20,63 +21,104 @@ const COR_NAT: Record<string, string> = {
   LIMPEZA: "#0891b2", MANUTENCAO: "#1e3a5f", SEGURANCA: "#6d28d9",
   TI: "#334155", JARDINAGEM: "#15803d", FROTA: "#b45309", OUTRO: "#64748b",
 };
+const COR_COL: Record<string, string> = {
+  ABERTA: "#0284c7", TRIAGEM: "#7c3aed", EM_EXECUCAO: "#d97706", CONCLUIDA: "#059669",
+};
 
 export default async function Quadro({ searchParams }: { searchParams: Promise<any> }) {
   const sp = await searchParams;
   const ctx = await contexto();
-  const equipeSel = sp.equipe ?? null;
   const natSel = sp.natureza ?? null;
 
-  const [itens, equipes] = await Promise.all([
+  const [itens, predios, pontos] = await Promise.all([
     consultar(ctx, `
       select s.id, s.numero, s.titulo, s.descricao, s.situacao, s.prioridade, s.natureza,
              s.solicitante_nome, s.criado_em, s.prazo_em, s.origem, s.atendida_em,
              s.avaliacao_solicitante,
              (s.prazo_em < now() and s.situacao not in ('CONCLUIDA','CANCELADA','CONVERTIDA')) as vencida,
              round(extract(epoch from (now() - s.criado_em))/3600.0) as horas_aberta,
-             p.nome as predio, pt.nome as ponto, pt.tipo as ponto_tipo, e.nome as equipe, e.id as equipe_id
+             p.nome as predio, p.id as predio_id, pt.nome as ponto, pt.tipo as ponto_tipo
         from manutencao.solicitacao s
         left join manutencao.predio p on p.id = s.predio_id
         left join manutencao.ponto pt on pt.id = s.ponto_id
-        left join manutencao.equipe e on e.id = s.equipe_id
        where s.excluido_em is null and s.tenant_id = manutencao.tenant_atual()
          and s.criado_em >= now() - interval '60 days'
-         and ($1::uuid is null or s.equipe_id = $1::uuid)
-         and ($2::text is null or s.natureza = $2::text)
+         and ($1::text is null or s.natureza = $1::text)
        order by (s.prazo_em < now()) desc,
                 array_position(array['URGENTE','ALTA','MEDIA','BAIXA'], s.prioridade),
-                s.criado_em asc`, [equipeSel, natSel]),
-    P.cargaPorEquipe(ctx),
+                s.criado_em asc`, [natSel]),
+    consultar(ctx, `select id, nome from manutencao.predio
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
+    consultar(ctx, `select id, nome, predio_id from manutencao.ponto
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
   ]);
 
   const porCol = (k: string) => itens.filter((i: any) => i.situacao === k);
   const naturezas = [...new Set(itens.map((i: any) => i.natureza))] as string[];
 
+  // gráfico 1: distribuição pelas 4 fases (recebidas/triagem/execução/concluídas)
+  const partesFase = COLUNAS.map((c) => ({
+    rotulo: c.t, valor: porCol(c.k).length, cor: COR_COL[c.k],
+  }));
+
+  // gráfico 2: por prédio (só o que ainda está em aberto, para priorizar)
+  const abertos = (itens as any[]).filter((i) => !["CONCLUIDA", "CANCELADA", "CONVERTIDA"].includes(i.situacao));
+  const porPredioMap = new Map<string, number>();
+  for (const i of abertos) porPredioMap.set(i.predio ?? "Sem prédio", (porPredioMap.get(i.predio ?? "Sem prédio") ?? 0) + 1);
+  const porPredio = [...porPredioMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([rotulo, valor]) => ({ rotulo, valor, cor: "#1e3a5f" }));
+
+  // gráfico 3: envelhecimento do que está aberto (30/60/90 dias)
+  const buckets = { "até 30 dias": 0, "31 a 60 dias": 0, "61 a 90 dias": 0, "mais de 90 dias": 0 };
+  for (const i of abertos) {
+    const dias = Number(i.horas_aberta ?? 0) / 24;
+    if (dias <= 30) buckets["até 30 dias"]++;
+    else if (dias <= 60) buckets["31 a 60 dias"]++;
+    else if (dias <= 90) buckets["61 a 90 dias"]++;
+    else buckets["mais de 90 dias"]++;
+  }
+  const cores30 = ["#059669", "#d97706", "#ea580c", "#dc2626"];
+  const partesIdade = Object.entries(buckets).map(([rotulo, valor], i) => ({ rotulo, valor, cor: cores30[i]! }));
+
   return (
     <div className="space-y-5">
       <Titulo titulo="Quadro de atividades"
-        sub="Chamados abertos pelos usuários dos prédios, roteados por natureza para a equipe responsável." />
+        sub="Chamados abertos pelos usuários dos prédios, da triagem até a conclusão."
+        acao={<NovaSolicitacao predios={predios as any} pontos={pontos as any} />} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href="/quadro"
-          className={`rounded-full px-3 py-1.5 text-xs font-medium transition
-            ${!equipeSel && !natSel ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
-          Todas as equipes
-        </Link>
-        {equipes.map((e: any) => (
-          <Link key={e.id} href={`/quadro?equipe=${e.id}`}
-            className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition
-              ${equipeSel === e.id ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
-            <span aria-hidden className="h-2 w-2 rounded-full"
-                  style={{ background: COR_NAT[e.natureza] ?? "#64748b" }} />
-            {e.nome}
-            <span className={`rounded-full px-1.5 text-[10px] font-bold tabular-nums
-              ${Number(e.vencidas) > 0 ? "bg-red-500 text-white" : equipeSel === e.id ? "bg-white/20" : "bg-slate-100"}`}>
-              {num(e.fila)}
-            </span>
-          </Link>
-        ))}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Painel titulo="Recebidas · triagem · execução · concluídas">
+          <Empilhada partes={partesFase} />
+        </Painel>
+        <Painel titulo="Em aberto por prédio">
+          <BarrasNav formato="numero" dados={porPredio} />
+        </Painel>
+        <Painel titulo="Tempo em aberto">
+          <Empilhada partes={partesIdade} />
+          <p className="mt-2 text-[11px] text-slate-500">
+            Considera apenas o que ainda não foi concluído nem cancelado.
+          </p>
+        </Painel>
       </div>
+
+      {naturezas.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/quadro"
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition
+              ${!natSel ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
+            Todas as naturezas
+          </Link>
+          {naturezas.map((n) => (
+            <Link key={n} href={`/quadro?natureza=${n}`}
+              className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition
+                ${natSel === n ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
+              <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: COR_NAT[n] ?? "#64748b" }} />
+              {rotulo(n)}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {COLUNAS.map((col) => {
@@ -111,6 +153,9 @@ export default async function Quadro({ searchParams }: { searchParams: Promise<a
                       </span>
                     </div>
                     <p className="mt-1 text-sm font-medium leading-snug text-slate-800">{s.titulo}</p>
+                    {s.descricao && (
+                      <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{s.descricao}</p>
+                    )}
                     {s.ponto && (
                       <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
                         <span aria-hidden className="h-1.5 w-1.5 rounded-full"
@@ -121,6 +166,9 @@ export default async function Quadro({ searchParams }: { searchParams: Promise<a
                     <p className="mt-0.5 truncate text-[11px] text-slate-400">
                       {s.predio} · {s.solicitante_nome}
                       {s.origem === "QRCODE" && <span className="ml-1 font-medium text-marinho-600">QR</span>}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      aberta em {dataHora(s.criado_em)}
                     </p>
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <Selo v={s.prioridade} />

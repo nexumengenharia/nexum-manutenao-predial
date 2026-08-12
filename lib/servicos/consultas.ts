@@ -100,7 +100,7 @@ export const alertas = (ctx: Contexto) => consultar(ctx, `
    um numero achando que e o recorte em que clicou. */
 export type FiltroOrdem = {
   situacao?: string; tipo?: string; prioridade?: string; busca?: string;
-  predio?: string; atraso?: boolean; mes?: string;
+  predio?: string; atraso?: boolean; mes?: string; ativo?: string;
 };
 
 export const listarOrdens = (ctx: Contexto, f: FiltroOrdem = {}, limite = 100) => consultar(ctx, `
@@ -124,10 +124,11 @@ export const listarOrdens = (ctx: Contexto, f: FiltroOrdem = {}, limite = 100) =
      and ($7::boolean is not true or v.atrasada)
      and ($8::text is null
           or date_trunc('month', coalesce(o.concluida_em, o.aberta_em)) = ($8 || '-01')::date)
+     and ($10::uuid is null or o.ativo_id = $10::uuid)
    order by o.aberta_em desc
    limit $9`,
   [ctx.tenantId, f.situacao || null, f.tipo || null, f.prioridade || null, f.busca || null,
-   f.predio || null, f.atraso === true, f.mes || null, limite]);
+   f.predio || null, f.atraso === true, f.mes || null, limite, f.ativo || null]);
 
 export const obterOrdem = (ctx: Contexto, id: string) => consultarUm(ctx, `
   select o.*, p.nome as predio, s.nome as setor, s.centro_custo,
@@ -163,18 +164,21 @@ export const anexos = (ctx: Contexto, entidade: string, id: string) => consultar
    where tenant_id=$1 and entidade=$2 and entidade_id=$3 and excluido_em is null
    order by criado_em desc`, [ctx.tenantId, entidade, id]);
 
-export const listarSolicitacoes = (ctx: Contexto, situacao?: string) => consultar(ctx, `
+export const listarSolicitacoes = (ctx: Contexto, situacao?: string, ponto?: string) => consultar(ctx, `
   select s.id, s.numero, s.titulo, s.situacao, s.prioridade, s.origem,
          s.solicitante_nome, s.criado_em, s.ordem_id,
-         p.nome as predio, st.nome as setor, a.nome as ativo, o.numero as ordem_numero
+         p.nome as predio, st.nome as setor, a.nome as ativo, o.numero as ordem_numero,
+         pt.nome as ponto
     from manutencao.solicitacao s
-    join manutencao.predio p on p.id = s.predio_id
+    left join manutencao.predio p on p.id = s.predio_id
     left join manutencao.setor st on st.id = s.setor_id
     left join manutencao.ativo a on a.id = s.ativo_id
     left join manutencao.ordem o on o.id = s.ordem_id
+    left join manutencao.ponto pt on pt.id = s.ponto_id
    where s.tenant_id=$1 and s.excluido_em is null
      and ($2::text is null or s.situacao = $2)
-   order by s.criado_em desc limit 150`, [ctx.tenantId, situacao || null]);
+     and ($3::uuid is null or s.ponto_id = $3::uuid)
+   order by s.criado_em desc limit 150`, [ctx.tenantId, situacao || null, ponto || null]);
 
 export const listarAtivos = (ctx: Contexto, busca?: string) => consultar(ctx, `
   select a.id, a.nome, a.codigo, a.tombamento, a.codigo_publico, a.categoria,

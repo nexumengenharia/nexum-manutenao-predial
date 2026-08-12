@@ -4,6 +4,8 @@ import { consultar } from "@/lib/db";
 import { brl, num, data, rotulo } from "@/lib/fmt";
 import { Titulo, Painel } from "@/components/ui";
 import { Rosca } from "@/components/graficos";
+import { pode } from "@/lib/auth";
+import NovoControle from "./novo";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,7 @@ export default async function Controles({ searchParams }: { searchParams: Promis
   const sit = sp.situacao ?? null;
   const tipo = sp.tipo ?? null;
 
-  const [linhas, resumo, tipos] = await Promise.all([
+  const [linhas, resumo, tipos, ativos, predios, contratadas, veiculos, pontos] = await Promise.all([
     consultar(ctx, `
       select c.id, c.nome, c.tipo, c.norma, c.periodicidade_meses, c.ultima_data,
              c.proxima_data, c.situacao, c.custo_previsto, c.gera_ordem,
@@ -51,6 +53,16 @@ export default async function Controles({ searchParams }: { searchParams: Promis
     consultar(ctx, `select tipo, count(*)::int as total from manutencao.controle
                      where excluido_em is null and tenant_id = manutencao.tenant_atual()
                      group by 1 order by 2 desc`),
+    consultar(ctx, `select id, nome from manutencao.ativo
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
+    consultar(ctx, `select id, nome from manutencao.predio
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
+    consultar(ctx, `select id, razao_social as nome from manutencao.contratada
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by razao_social`),
+    consultar(ctx, `select id, placa as nome from manutencao.veiculo
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by placa`),
+    consultar(ctx, `select id, nome from manutencao.ponto
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
   ]);
 
   const porSit = (k: string) => Number(resumo.find((r: any) => r.situacao === k)?.total ?? 0);
@@ -60,7 +72,11 @@ export default async function Controles({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-5">
       <Titulo titulo="Controles e vencimentos"
-        sub="Tudo que tem data limite: recarga de extintor, teste hidrostático, potabilidade, licenciamento, seguro e vigência contratual." />
+        sub="Tudo que tem data limite: recarga de extintor, teste hidrostático, potabilidade, licenciamento, seguro e vigência contratual."
+        acao={pode(ctx.sessao.papel, "cadastro.editar") && (
+          <NovoControle ativos={ativos as any} predios={predios as any}
+                        contratadas={contratadas as any} veiculos={veiculos as any} pontos={pontos as any} />
+        )} />
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[

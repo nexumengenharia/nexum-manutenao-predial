@@ -16,8 +16,9 @@ export default async function Solicitacoes({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const ctx = await contexto();
   const situacao = sp.situacao && SITUACOES.includes(sp.situacao) ? sp.situacao : undefined;
+  const ponto = typeof sp.ponto === "string" && /^[0-9a-f-]{36}$/i.test(sp.ponto) ? sp.ponto : undefined;
 
-  const lista = (await q.listarSolicitacoes(ctx, situacao)) as any[];
+  const lista = (await q.listarSolicitacoes(ctx, situacao, ponto)) as any[];
 
   const conta = (s: string) => lista.filter((x) => x.situacao === s).length;
   const porQr = lista.filter((x) => x.origem === "QRCODE").length;
@@ -26,12 +27,21 @@ export default async function Solicitacoes({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-5">
       <Titulo titulo="Solicitações"
-        sub={`${lista.length} chamado(s)${situacao ? ` em ${rotulo(situacao)}` : " nos registros recentes"} — ${ctx.sessao.tribunal}`}
+        sub={`${lista.length} chamado(s)${situacao ? ` em ${rotulo(situacao)}` : " nos registros recentes"}`
+          + `${ponto && lista[0]?.ponto ? ` · ponto: ${lista[0].ponto}` : ""} — ${ctx.sessao.tribunal}`}
         acao={
-          <Link href="/quadro"
-            className="rounded-md bg-marinho-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-marinho-800">
-            Abrir o quadro
-          </Link>
+          <div className="flex items-center gap-2">
+            {ponto && (
+              <Link href="/solicitacoes"
+                className="rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-white">
+                Remover filtro de ponto
+              </Link>
+            )}
+            <Link href="/quadro"
+              className="rounded-md bg-marinho-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-marinho-800">
+              Abrir o quadro
+            </Link>
+          </div>
         } />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

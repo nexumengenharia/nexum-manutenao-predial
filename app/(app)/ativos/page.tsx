@@ -19,12 +19,11 @@ export default async function Ativos({ searchParams }: { searchParams: Promise<a
   const sp = await searchParams;
   const ctx = await contexto();
   const busca = (sp.q ?? "").trim();
-  const cat = sp.categoria ?? null;
   const predio = sp.predio ?? null;
   const situacao = sp.situacao ?? null;
-  const agrupar = sp.agrupar ?? "categoria";
+  const agrupar = "predio";
 
-  const [linhas, cats, predios] = await Promise.all([
+  const [linhas, predios] = await Promise.all([
     consultar(ctx, `
       select a.id, a.nome, a.codigo, a.tombamento, a.categoria, a.situacao, a.criticidade,
              a.pavimento, a.localizacao, a.fabricante, a.modelo, a.valor_aquisicao,
@@ -49,65 +48,33 @@ export default async function Ativos({ searchParams }: { searchParams: Promise<a
        where a.excluido_em is null and a.tenant_id = manutencao.tenant_atual()
          and ($1 = '' or a.nome ilike '%'||$1||'%' or a.codigo ilike '%'||$1||'%'
               or a.tombamento ilike '%'||$1||'%')
-         and ($2::text is null or a.categoria = $2::text)
-         and ($3::uuid is null or a.predio_id = $3::uuid)
-         and ($4::text is null or a.situacao = $4::text)
-       order by a.categoria, a.nome`, [busca, cat, predio, situacao]),
-    consultar(ctx, `select categoria, count(*)::int as total from manutencao.ativo
-                     where excluido_em is null and tenant_id = manutencao.tenant_atual()
-                     group by 1 order by 2 desc`),
+         and ($2::uuid is null or a.predio_id = $2::uuid)
+         and ($3::text is null or a.situacao = $3::text)
+       order by p.nome, a.nome`, [busca, predio, situacao]),
     consultar(ctx, `select id, nome from manutencao.predio
                       where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
   ]);
 
   const grupos = new Map<string, any[]>();
   for (const a of linhas as any[]) {
-    const chave = agrupar === "predio" ? (a.predio ?? "Sem prédio") : (a.categoria ?? "OUTRO");
+    const chave = a.predio ?? "Sem prédio";
     if (!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave)!.push(a);
   }
 
-  const qs = (extra: Record<string, string | null>) => {
-    const p = new URLSearchParams();
-    const base: Record<string, any> = { q: busca || null, categoria: cat, predio, situacao, agrupar, ...extra };
-    for (const [k, v] of Object.entries(base)) if (v) p.set(k, String(v));
-    return `/ativos?${p.toString()}`;
-  };
-
   return (
     <div className="space-y-5">
-      <Titulo titulo="Ativos" sub={`${linhas.length} equipamento(s) sob gestão.`}
+      <Titulo titulo="Ativos" sub={`${linhas.length} equipamento(s) sob gestão, agrupados por prédio.`}
         acao={
-          <div className="flex flex-wrap items-center gap-1">
-            {[["categoria","Por categoria"],["predio","Por prédio"]].map(([k,l]) => (
-              <Link key={k} href={qs({ agrupar: k })}
-                className={`rounded px-3 py-1.5 text-xs font-medium transition
-                  ${agrupar === k ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
-                {l}
-              </Link>
-            ))}
-            {pode(ctx.sessao.papel, "cadastro.editar") && (
-              <span className="ml-1">
-                <Cadastro entidade="ativo" titulo="Ativo"
-                  campos={camposAtivo(predios as { id: string; nome: string }[])} />
-              </span>
-            )}
-          </div>
+          pode(ctx.sessao.papel, "cadastro.editar") && (
+            <Cadastro entidade="ativo" titulo="Ativo"
+              campos={camposAtivo(predios as { id: string; nome: string }[])} />
+          )
         } />
 
       <form className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <input name="q" defaultValue={busca} placeholder="Nome, código ou tombamento"
           className="min-w-[200px] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <input type="hidden" name="agrupar" value={agrupar} />
-        <select name="categoria" defaultValue={cat ?? ""}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Todas as categorias</option>
-          {cats.map((c: any) => (
-            <option key={c.categoria} value={c.categoria}>
-              {CORES_CATEGORIA[c.categoria]?.nome ?? rotulo(c.categoria)} ({c.total})
-            </option>
-          ))}
-        </select>
         <select name="predio" defaultValue={predio ?? ""}
           className="rounded-md border border-slate-300 px-3 py-2 text-sm">
           <option value="">Todos os prédios</option>

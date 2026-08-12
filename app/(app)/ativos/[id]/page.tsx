@@ -23,10 +23,19 @@ export default async function Ativo({ params }: { params: Promise<{ id: string }
   const a: any = await q.obterAtivo(ctx, id);
   if (!a) notFound();
 
-  const [hist, ind, controles, predios] = await Promise.all([
+  const [hist, ind, ind12, controles, predios] = await Promise.all([
     q.historicoDoAtivo(ctx, id),
     consultarUm(ctx, `select * from manutencao.vw_indicador_ativo
        where ativo_id = $1 and tenant_id = manutencao.tenant_atual()`, [id]),
+    consultarUm(ctx, `
+      select coalesce(sum(custo_real), 0)                                as custo_12m,
+             count(*)::int                                               as ordens_12m,
+             avg(custo_real)                                             as custo_medio_12m,
+             avg(extract(epoch from (concluida_em - aberta_em)) / 3600)  as horas_medias_12m
+        from manutencao.ordem
+       where ativo_id = $1 and tenant_id = manutencao.tenant_atual()
+         and excluido_em is null and situacao = 'CONCLUIDA'
+         and concluida_em >= now() - interval '12 months'`, [id]),
     consultar(ctx, `
       select id, nome, tipo, norma, proxima_data, situacao, custo_previsto,
              (proxima_data - current_date) as dias
@@ -38,8 +47,10 @@ export default async function Ativo({ params }: { params: Promise<{ id: string }
   ]);
 
   const i: any = ind ?? {};
+  const i12: any = ind12 ?? {};
   const valor = Number(a.valor_aquisicao ?? 0);
   const gasto = Number(i.custo_total ?? 0);
+  const gasto12 = Number(i12.custo_12m ?? 0);
   const pct = valor > 0 ? (gasto * 100) / valor : null;
 
   return (
@@ -59,20 +70,32 @@ export default async function Ativo({ params }: { params: Promise<{ id: string }
         } />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Cartao titulo="Custo acumulado" valor={brl(gasto)}
-                detalhe={`${num(i.ordens ?? 0)} ordem(ns) no histórico`} />
-        <Cartao titulo="Corretivas" valor={num(i.corretivas ?? 0)}
-                tom={Number(i.corretivas ?? 0) > Number(i.ordens ?? 0) / 2 ? "alerta" : "neutro"}
-                detalhe="quanto maior, menos a preventiva está funcionando" />
-        <Cartao titulo="Custo médio por ordem" valor={i.custo_medio ? brl(i.custo_medio) : "—"}
-                detalhe="média das ordens concluídas" />
+        <Cartao titulo="Custo nos últimos 12 meses" valor={brl(gasto12)}
+                detalhe={`${num(i12.ordens_12m ?? 0)} ordem(ns) concluída(s) no período`} />
+        <Cartao titulo="Custo médio por ordem (12 meses)" valor={i12.custo_medio_12m ? brl(i12.custo_medio_12m) : "—"}
+                detalhe="média das ordens concluídas no período" />
+        <Cartao titulo="Tempo médio por ordem (12 meses)"
+                valor={i12.horas_medias_12m ? `${num(i12.horas_medias_12m, 1)} h` : "—"}
+                detalhe="abertura até conclusão, no período" />
         <Cartao titulo="Consumo sobre o valor do bem"
                 valor={pct !== null ? `${num(pct, 1)}%` : "—"}
                 tom={pct !== null && pct >= 60 ? "critico" : pct !== null && pct >= 30 ? "alerta" : "bom"}
                 detalhe={pct === null
                   ? "cadastre o valor de aquisição para calcular"
                   : pct >= 60 ? "substituir tende a sair mais barato que manter"
-                  : "dentro de um patamar razoável"} />
+                  : `${brl(gasto)} acumulado desde o cadastro`} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+        <span>
+          Histórico completo: <strong className="tabular-nums">{num(i.ordens ?? 0)}</strong> ordem(ns) ·{" "}
+          <strong className="tabular-nums">{num(i.corretivas ?? 0)}</strong> corretiva(s) ·{" "}
+          <strong className="tabular-nums">{brl(gasto)}</strong> acumulado
+        </span>
+        <Link href={`/ordens?ativo=${a.id}`}
+          className="ml-auto rounded-md bg-marinho-700 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-marinho-800">
+          Ver histórico de OS
+        </Link>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

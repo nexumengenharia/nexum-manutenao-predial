@@ -16,18 +16,23 @@ export default async function Ordens({ searchParams }: { searchParams: Promise<R
   const sp = await searchParams;
   const ctx = await contexto();
   const predioValido = typeof sp.predio === "string" && /^[0-9a-f-]{36}$/i.test(sp.predio) ? sp.predio : undefined;
+  const ativoValido = typeof sp.ativo === "string" && /^[0-9a-f-]{36}$/i.test(sp.ativo) ? sp.ativo : undefined;
   const mesValido = typeof sp.mes === "string" && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : undefined;
   const soAtrasadas = sp.atraso === "1";
 
-  const lista = await q.listarOrdens(ctx, {
-    situacao: sp.situacao, tipo: sp.tipo, prioridade: sp.prioridade, busca: sp.busca,
-    predio: predioValido, mes: mesValido, atraso: soAtrasadas,
-  });
+  const [lista, ativoRef] = await Promise.all([
+    q.listarOrdens(ctx, {
+      situacao: sp.situacao, tipo: sp.tipo, prioridade: sp.prioridade, busca: sp.busca,
+      predio: predioValido, mes: mesValido, atraso: soAtrasadas, ativo: ativoValido,
+    }),
+    ativoValido ? q.obterAtivo(ctx, ativoValido) : Promise.resolve(null),
+  ]);
 
   const recortes = [
     soAtrasadas ? "somente atrasadas" : null,
     mesValido ? `competência ${mesValido}` : null,
     predioValido ? "prédio selecionado" : null,
+    ativoRef ? `ativo: ${(ativoRef as any).nome}` : null,
   ].filter(Boolean);
 
   return (

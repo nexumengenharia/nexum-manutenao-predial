@@ -127,12 +127,82 @@ export async function comentar(ctx: Contexto, entidade: string, entidadeId: stri
   });
 }
 
+/* Abertura interna de solicitacao (gestor/fiscal registrando um chamado
+   relatado por telefone, presencialmente etc — sem passar pelo QR). */
+export type NovaSolicitacao = {
+  predioId: string; setorId?: string | null; pontoId?: string | null; ativoId?: string | null;
+  equipeId?: string | null; natureza: string; titulo: string; descricao?: string | null;
+  prioridade?: string; solicitanteNome: string; solicitanteContato?: string | null;
+};
+
+export async function criarSolicitacaoInterna(ctx: Contexto, d: NovaSolicitacao) {
+  return comContexto(ctx, async (c) => {
+    const numero = await proximoNumero(c, ctx.tenantId, "solicitacao", "SOL");
+    let equipeId = d.equipeId || null;
+    if (!equipeId) {
+      const { rows: eq } = await c.query(
+        `select id from manutencao.equipe where tenant_id=$1 and natureza=$2 and ativo limit 1`,
+        [ctx.tenantId, d.natureza]);
+      equipeId = eq[0]?.id ?? null;
+    }
+    const { rows } = await c.query(
+      `insert into manutencao.solicitacao
+         (tenant_id, predio_id, setor_id, ponto_id, ativo_id, equipe_id, natureza, numero,
+          titulo, descricao, prioridade, solicitante_nome, solicitante_contato, origem)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'MANUAL')
+       returning id, numero`,
+      [ctx.tenantId, d.predioId, d.setorId || null, d.pontoId || null, d.ativoId || null,
+       equipeId, d.natureza, numero, d.titulo, d.descricao || null, d.prioridade || "MEDIA",
+       d.solicitanteNome, d.solicitanteContato || null]);
+    return rows[0] as { id: string; numero: string };
+  });
+}
+
 export async function triarSolicitacao(ctx: Contexto, id: string, situacao: string) {
   return comContexto(ctx, async (c) => {
     await c.query(
       `update manutencao.solicitacao set situacao=$3 where tenant_id=$1 and id=$2`,
       [ctx.tenantId, id, situacao],
     );
+  });
+}
+
+/* Criacao de controle de vencimento. Fora do padrao generico CADASTROS porque
+   a tabela tem uma CHECK (controle_alvo_unico) exigindo exatamente uma das
+   colunas ativo_id/ponto_id/predio_id/contratada_id/veiculo_id preenchida —
+   o formulario escolhe o alvo por tipo e so a coluna correspondente recebe
+   valor, as outras quatro vao null. */
+export type NovoControle = {
+  alvoTipo: "ativo" | "ponto" | "predio" | "contratada" | "veiculo";
+  alvoId: string;
+  nome: string; tipo: string; norma?: string | null;
+  periodicidadeMeses?: number | null; ultimaData?: string | null; proximaData: string;
+  custoPrevisto?: number | null; geraOrdem?: boolean;
+};
+
+export async function criarControle(ctx: Contexto, d: NovoControle) {
+  const colunas: Record<NovoControle["alvoTipo"], string> = {
+    ativo: "ativo_id", ponto: "ponto_id", predio: "predio_id",
+    contratada: "contratada_id", veiculo: "veiculo_id",
+  };
+  const coluna = colunas[d.alvoTipo];
+  if (!coluna) throw new Error("Alvo do controle invalido.");
+
+  return comContexto(ctx, async (c) => {
+    const { rows } = await c.query(
+      `insert into manutencao.controle
+         (tenant_id, ${coluna}, nome, tipo, norma, periodicidade_meses, ultima_data,
+          proxima_data, situacao, custo_previsto, gera_ordem, criado_por)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,
+               case when $8::date < current_date then 'VENCIDO'
+                    when $8::date <= current_date + 30 then 'A_VENCER'
+                    else 'VIGENTE' end,
+               $9,$10,$11)
+       returning id`,
+      [ctx.tenantId, d.alvoId, d.nome, d.tipo, d.norma || null,
+       d.periodicidadeMeses ?? null, d.ultimaData || null, d.proximaData,
+       d.custoPrevisto ?? null, d.geraOrdem ?? false, ctx.usuarioId || null]);
+    return rows[0] as { id: string };
   });
 }
 
@@ -364,6 +434,15 @@ export const CADASTROS: Record<string, Def> = {
       { n: "numero_contrato", t: "texto" }, { n: "contrato_inicio", t: "data" },
       { n: "contrato_fim", t: "data" }, { n: "valor_contrato", t: "num" },
       { n: "avaliacao", t: "num" }, { n: "ativo", t: "bool" },
+    ],
+  },
+  item_estoque: {
+    tabela: "item_estoque", rotulo: "Item de estoque",
+    obrigatorias: ["codigo", "nome", "unidade"],
+    colunas: [
+      { n: "codigo", t: "texto" }, { n: "nome", t: "texto" }, { n: "categoria", t: "texto" },
+      { n: "unidade", t: "texto" }, { n: "localizacao", t: "texto" }, { n: "predio_id", t: "uuid" },
+      { n: "quantidade", t: "num" }, { n: "quantidade_minima", t: "num" }, { n: "custo_unitario", t: "num" },
     ],
   },
 };
