@@ -12,7 +12,11 @@ function criarPool(url: string) {
   return new Pool({
     connectionString: url,
     ssl: { rejectUnauthorized: false },
-    max: 4,
+    // O pooler do Supabase (porta 6543, pgbouncer em modo transacao) aguenta
+    // bem mais que 4 conexoes simultaneas; paginas com varias consultas em
+    // paralelo (Promise.all) ficavam enfileirando na pool antes de sequer
+    // chegar no banco. 4 -> 10 reduz essa espera sem afogar o pooler.
+    max: 10,
     idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 10_000,
   });
@@ -63,10 +67,18 @@ export async function comContexto<T>(
   const pool = await obterPool();
   const c = await pool.connect();
   try {
+    // Banco fica no sa-east-1 (Sao Paulo); cada ida-e-volta ao Postgres tem
+    // custo de rede fixo. Comecava com 4 round-trips so para preparar o
+    // contexto (begin + 3 set_config separados) antes da consulta em si —
+    // agora sao 2: "begin" e um unico select com os 3 set_config juntos.
+    // (Nao da para combinar as duas num so `query()` com parametros: o
+    // protocolo estendido do Postgres nao aceita multiplos comandos numa
+    // unica mensagem Parse quando ha parametros.)
     await c.query("begin");
-    await c.query("select set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-    await c.query("select set_config('app.usuario_id', $1, true)", [ctx.usuarioId ?? ""]);
-    await c.query("select set_config('app.ip', $1, true)", [ctx.ip ?? ""]);
+    await c.query(
+      "select set_config('app.tenant_id',$1,true), set_config('app.usuario_id',$2,true), set_config('app.ip',$3,true)",
+      [ctx.tenantId, ctx.usuarioId ?? "", ctx.ip ?? ""],
+    );
     const r = await fn(c);
     await c.query("commit");
     return r;

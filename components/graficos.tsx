@@ -144,6 +144,53 @@ export function BarrasNav({
   );
 }
 
+/* =============================================== Barras verticais (colunas) */
+export function BarrasVerticais({
+  dados, formato = "numero", altura = 170,
+}: {
+  dados: { rotulo: string; valor: number; href?: string; cor?: string }[];
+  formato?: Formato; altura?: number;
+}) {
+  const router = useRouter();
+  const [ativo, setAtivo] = useState<number | null>(null);
+  if (!dados.length) return <p className="py-8 text-center text-sm text-slate-500">Sem dados.</p>;
+
+  const max = Math.max(...dados.map((d) => d.valor), 1);
+
+  return (
+    <div className="min-w-0">
+      <div className="flex items-end gap-2.5 sm:gap-3" style={{ height: altura }}>
+        {dados.map((d, i) => {
+          const h = Math.max((d.valor / max) * 100, 3);
+          return (
+            <div key={d.rotulo} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+              <span className={`text-xs font-semibold tabular-nums text-slate-800 transition
+                ${ativo === i ? "text-marinho-800" : ""}`}>
+                {fmtValor(d.valor, formato)}
+              </span>
+              <button type="button" disabled={!d.href}
+                onMouseEnter={() => setAtivo(i)} onMouseLeave={() => setAtivo(null)}
+                onClick={() => d.href && router.push(d.href)}
+                title={`${d.rotulo}: ${fmtValor(d.valor, formato)}`}
+                style={{ height: `${h}%`, background: d.cor ?? "#1e3a5f" }}
+                className={`w-full max-w-10 rounded-t-md transition-all duration-300
+                  ${d.href ? "cursor-pointer" : "cursor-default"}
+                  ${ativo === i ? "brightness-110" : ""}`} />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1.5 flex gap-2.5 sm:gap-3">
+        {dados.map((d) => (
+          <p key={d.rotulo} className="min-w-0 flex-1 truncate text-center text-[11px] text-slate-500" title={d.rotulo}>
+            {d.rotulo}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ======================================================= Serie temporal */
 export function Serie({
   dados, formato = "moeda", altura = 150,

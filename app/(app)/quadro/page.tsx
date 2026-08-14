@@ -4,7 +4,7 @@ import { consultar } from "@/lib/db";
 import { num, dataHora, rotulo } from "@/lib/fmt";
 import { Titulo, Selo, Painel } from "@/components/ui";
 import { CORES_PONTO } from "@/components/icones";
-import { Empilhada, BarrasNav } from "@/components/graficos";
+import { Rosca, BarrasVerticais } from "@/components/graficos";
 import Mover from "./mover";
 import NovaSolicitacao from "./nova";
 
@@ -89,13 +89,13 @@ export default async function Quadro({ searchParams }: { searchParams: Promise<a
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Painel titulo="Recebidas · triagem · execução · concluídas">
-          <Empilhada partes={partesFase} />
+          <Rosca centroRotulo="chamados" formato="numero" dados={partesFase} />
         </Painel>
         <Painel titulo="Em aberto por prédio">
-          <BarrasNav formato="numero" dados={porPredio} />
+          <BarrasVerticais formato="numero" dados={porPredio} />
         </Painel>
         <Painel titulo="Tempo em aberto">
-          <Empilhada partes={partesIdade} />
+          <Rosca centroRotulo="em aberto" formato="numero" dados={partesIdade} />
           <p className="mt-2 text-[11px] text-slate-500">
             Considera apenas o que ainda não foi concluído nem cancelado.
           </p>
