@@ -2,7 +2,8 @@ import Link from "next/link";
 import { contexto } from "@/lib/sessao";
 import * as q from "@/lib/servicos/consultas";
 import { Selo, Tabela, Td, Titulo } from "@/components/ui";
-import { brl, data, dataHora } from "@/lib/fmt";
+import { brl, data, dataHora, rotulo } from "@/lib/fmt";
+import FiltroColuna from "@/components/filtro-coluna";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,8 @@ const OPCOES = {
   tipo: ["PREVENTIVA", "PREDITIVA", "CORRETIVA", "PMOC"],
   prioridade: ["URGENTE", "ALTA", "MEDIA", "BAIXA"],
 };
+
+const op = (vs: string[]) => vs.map((v) => ({ v, t: rotulo(v) }));
 
 export default async function Ordens({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
@@ -51,25 +54,22 @@ export default async function Ordens({ searchParams }: { searchParams: Promise<R
           <input id="busca" name="busca" defaultValue={sp.busca ?? ""} placeholder="Número ou título"
                  className="mt-1 w-56 rounded border border-slate-300 px-2.5 py-1.5 text-sm" />
         </div>
-        {(["situacao", "tipo", "prioridade"] as const).map((campo) => (
-          <div key={campo}>
-            <label htmlFor={campo} className="block text-xs font-medium capitalize text-slate-600">{campo}</label>
-            <select id={campo} name={campo} defaultValue={sp[campo] ?? ""}
-                    className="mt-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm">
-              <option value="">Todas</option>
-              {OPCOES[campo].map((o) => (
-                <option key={o} value={o}>{o.replace(/_/g, " ").toLowerCase()}</option>
-              ))}
-            </select>
-          </div>
-        ))}
         <button className="rounded bg-marinho-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-marinho-800">
-          Filtrar
+          Buscar
         </button>
-        <Link href="/ordens" className="px-2 py-1.5 text-sm text-slate-600 hover:underline">Limpar</Link>
+        <Link href="/ordens" className="px-2 py-1.5 text-sm text-slate-600 hover:underline">Limpar filtros</Link>
+        <p className="w-full text-[11px] text-slate-500">
+          Tipo, prioridade e situação agora se filtram clicando no funil ao lado do nome de cada coluna, como no Excel.
+        </p>
       </form>
 
-      <Tabela cols={["Número", "Título", "Tipo", "Prioridade", "Situação", "Prédio / Setor", "Contratada", "Prazo", "Custo"]}
+      <Tabela cols={[
+                "Número", "Título",
+                <FiltroColuna key="tipo" campo="tipo" rotulo="Tipo" opcoes={op(OPCOES.tipo)} />,
+                <FiltroColuna key="prioridade" campo="prioridade" rotulo="Prioridade" opcoes={op(OPCOES.prioridade)} />,
+                <FiltroColuna key="situacao" campo="situacao" rotulo="Situação" opcoes={op(OPCOES.situacao)} />,
+                "Prédio / Setor", "Contratada", "Prazo", "Custo",
+              ]}
               vazio={lista.length === 0}>
         {lista.map((o: any) => (
           <tr key={o.id} className={o.atrasada ? "bg-red-50/60 hover:bg-red-50" : "hover:bg-slate-50"}>

@@ -167,6 +167,22 @@ export async function triarSolicitacao(ctx: Contexto, id: string, situacao: stri
   });
 }
 
+/* Ficha da solicitacao (triagem): grava a prioridade definida pelo triador e
+   garante que o card saia de ABERTA para TRIAGEM no mesmo gesto. */
+export async function definirPrioridadeSolicitacao(ctx: Contexto, id: string, prioridade: string) {
+  return comContexto(ctx, async (c) => {
+    const { rows } = await c.query(
+      `update manutencao.solicitacao
+          set prioridade = $3,
+              situacao = case when situacao = 'ABERTA' then 'TRIAGEM' else situacao end
+        where tenant_id=$1 and id=$2 and excluido_em is null
+        returning id, situacao, prioridade`,
+      [ctx.tenantId, id, prioridade]);
+    if (!rows[0]) throw new Error("Solicitacao nao encontrada.");
+    return rows[0];
+  });
+}
+
 /* Criacao de controle de vencimento. Fora do padrao generico CADASTROS porque
    a tabela tem uma CHECK (controle_alvo_unico) exigindo exatamente uma das
    colunas ativo_id/ponto_id/predio_id/contratada_id/veiculo_id preenchida —
@@ -434,6 +450,16 @@ export const CADASTROS: Record<string, Def> = {
       { n: "numero_contrato", t: "texto" }, { n: "contrato_inicio", t: "data" },
       { n: "contrato_fim", t: "data" }, { n: "valor_contrato", t: "num" },
       { n: "avaliacao", t: "num" }, { n: "ativo", t: "bool" },
+    ],
+  },
+  plano: {
+    tabela: "plano", rotulo: "Plano de manutenção",
+    obrigatorias: ["nome", "tipo", "predio_id", "periodicidade"],
+    colunas: [
+      { n: "nome", t: "texto" }, { n: "tipo", t: "texto" }, { n: "periodicidade", t: "texto" },
+      { n: "predio_id", t: "uuid" }, { n: "contratada_id", t: "uuid" }, { n: "checklist_id", t: "uuid" },
+      { n: "proxima_execucao", t: "data" }, { n: "prazo_sla_horas", t: "int" },
+      { n: "custo_estimado", t: "num" },
     ],
   },
   item_estoque: {

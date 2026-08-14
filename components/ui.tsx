@@ -66,15 +66,15 @@ export function Selo({ v }: { v: string | null | undefined }) {
 }
 
 export function Tabela({ cols, children, vazio }: {
-  cols: string[]; children: React.ReactNode; vazio?: boolean;
+  cols: React.ReactNode[]; children: React.ReactNode; vazio?: boolean;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
       <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">
-            {cols.map((c) => (
-              <th key={c} scope="col"
+            {cols.map((c, i) => (
+              <th key={i} scope="col"
                   className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                 {c}
               </th>

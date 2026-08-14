@@ -52,6 +52,27 @@ export const camposAtivo = (predios: { id: string; nome: string }[]): CampoDef[]
   { nome: "observacoes", rotulo: "Observações", tipo: "area" },
 ];
 
+export const camposPlano = (
+  predios: { id: string; nome: string }[],
+  contratadas: { id: string; nome: string }[],
+  checklists: { id: string; nome: string }[],
+): CampoDef[] => [
+  { nome: "nome", rotulo: "Nome do plano", obrigatorio: true, largura: "cheia" },
+  { nome: "tipo", rotulo: "Tipo", obrigatorio: true, ajuda: "Ex.: PREVENTIVA ou PMOC" },
+  { nome: "periodicidade", rotulo: "Periodicidade", obrigatorio: true,
+    ajuda: "Ex.: MENSAL, TRIMESTRAL, SEMESTRAL, ANUAL" },
+  { nome: "predio_id", rotulo: "Prédio", tipo: "selecao", obrigatorio: true,
+    opcoes: predios.map((p) => ({ v: p.id, t: p.nome })) },
+  { nome: "contratada_id", rotulo: "Contratada responsável", tipo: "selecao",
+    opcoes: contratadas.map((c) => ({ v: c.id, t: c.nome })) },
+  { nome: "checklist_id", rotulo: "Checklist técnico", tipo: "selecao",
+    opcoes: checklists.map((c) => ({ v: c.id, t: c.nome })),
+    ajuda: "As OS geradas por este plano herdam os itens deste checklist" },
+  { nome: "proxima_execucao", rotulo: "Próxima execução", tipo: "data" },
+  { nome: "prazo_sla_horas", rotulo: "SLA (horas)", tipo: "numero", passo: "1" },
+  { nome: "custo_estimado", rotulo: "Custo estimado (R$)", tipo: "numero" },
+];
+
 export const camposItemEstoque = (predios: { id: string; nome: string }[]): CampoDef[] => [
   { nome: "codigo", rotulo: "Código", obrigatorio: true, ajuda: "Único no almoxarifado" },
   { nome: "nome", rotulo: "Nome do item", obrigatorio: true, largura: "cheia" },

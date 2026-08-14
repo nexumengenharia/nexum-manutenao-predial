@@ -146,13 +146,18 @@ export default async function Quadro({ searchParams }: { searchParams: Promise<a
                       className={`rounded-lg border bg-white p-3 shadow-sm transition hover:shadow-md
                         ${s.vencida ? "border-l-4 border-l-red-500 border-slate-200" : "border-slate-200"}`}>
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-mono text-[10px] text-slate-400">{s.numero}</span>
+                      <Link href={`/solicitacoes/${s.id}`} className="font-mono text-[10px] text-slate-400 hover:underline">
+                        {s.numero}
+                      </Link>
                       <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white"
                             style={{ background: COR_NAT[s.natureza] ?? "#64748b" }}>
                         {rotulo(s.natureza)}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm font-medium leading-snug text-slate-800">{s.titulo}</p>
+                    <Link href={`/solicitacoes/${s.id}`}
+                      className="mt-1 block text-sm font-medium leading-snug text-slate-800 hover:text-marinho-700 hover:underline">
+                      {s.titulo}
+                    </Link>
                     {s.descricao && (
                       <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{s.descricao}</p>
                     )}

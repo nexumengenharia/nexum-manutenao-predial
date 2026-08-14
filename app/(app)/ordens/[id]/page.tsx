@@ -4,8 +4,10 @@ import { contexto } from "@/lib/sessao";
 import * as q from "@/lib/servicos/consultas";
 import { pode } from "@/lib/auth";
 import { brl, num, data, dataHora, rotulo } from "@/lib/fmt";
-import { Titulo, Painel, Selo, Campo, Tabela, Td } from "@/components/ui";
+import { Titulo, Painel, Selo, Campo } from "@/components/ui";
 import MudarSituacao from "./situacao";
+import ChecklistItem from "./checklist-item";
+import Comentar from "./comentar";
 
 export const dynamic = "force-dynamic";
 
@@ -122,23 +124,25 @@ export default async function Ordem({ params }: { params: Promise<{ id: string }
             Esta ordem não nasceu de um plano com checklist, então não há itens a verificar.
           </p>
         ) : (
-          <Tabela cols={["#", "Item", "Resposta", "Conforme", "Observação"]} vazio={false}>
-            {(checklist as any[]).map((i) => (
-              <tr key={i.id} className="hover:bg-slate-50">
-                <Td className="tabular-nums text-xs">{i.ordem_exibicao}</Td>
-                <Td>{i.descricao}</Td>
-                <Td className="text-xs">{i.resposta}</Td>
-                <Td>
-                  {i.conforme === null || i.conforme === undefined
-                    ? <span className="text-slate-400">não respondido</span>
-                    : i.conforme
-                      ? <span className="font-medium text-emerald-700">conforme</span>
-                      : <span className="font-medium text-red-700">não conforme</span>}
-                </Td>
-                <Td className="text-xs">{i.observacao}</Td>
-              </tr>
-            ))}
-          </Tabela>
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full min-w-[640px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <th className="px-3 py-2.5 text-left">#</th>
+                  <th className="px-3 py-2.5 text-left">Item</th>
+                  <th className="px-3 py-2.5 text-left">Resposta</th>
+                  <th className="px-3 py-2.5 text-left">Conforme</th>
+                  <th className="px-3 py-2.5 text-left">Observação</th>
+                  <th className="px-3 py-2.5 text-left"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(checklist as any[]).map((i) => (
+                  <ChecklistItem key={i.id} item={i} podeEditar={podeMover} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Painel>
 
@@ -158,6 +162,7 @@ export default async function Ordem({ params }: { params: Promise<{ id: string }
             ))}
           </ul>
         )}
+        <Comentar id={o.id} />
       </Painel>
     </div>
   );

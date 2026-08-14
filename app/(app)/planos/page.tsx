@@ -1,19 +1,34 @@
 import { contexto } from "@/lib/sessao";
+import { consultar } from "@/lib/db";
 import * as q from "@/lib/servicos/consultas";
 import { Selo, Tabela, Td, Titulo } from "@/components/ui";
 import { brl, data } from "@/lib/fmt";
+import { pode } from "@/lib/auth";
+import Cadastro from "@/components/cadastro";
+import { camposPlano } from "@/components/campos";
 
 export const dynamic = "force-dynamic";
 
 export default async function Planos() {
   const ctx = await contexto();
-  const lista = await q.listarPlanos(ctx);
+  const [lista, predios, contratadas, checklists] = await Promise.all([
+    q.listarPlanos(ctx),
+    consultar(ctx, `select id, nome from manutencao.predio
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
+    consultar(ctx, `select id, razao_social as nome from manutencao.contratada
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by razao_social`),
+    consultar(ctx, `select id, nome from manutencao.checklist_modelo
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
+  ]);
   const pmoc = lista.filter((p: any) => p.tipo === "PMOC").length;
+  const podeEditar = pode(ctx.sessao.papel, "cadastro.editar");
+  const campos = camposPlano(predios as any, contratadas as any, checklists as any);
 
   return (
     <>
       <Titulo titulo="Planos de manutenção e PMOC"
-              sub={`${lista.length} planos ativos, dos quais ${pmoc} são PMOC (Portaria nº 3.523/MS)`} />
+              sub={`${lista.length} planos ativos, dos quais ${pmoc} são PMOC (Portaria nº 3.523/MS)`}
+              acao={podeEditar && <Cadastro entidade="plano" titulo="Plano" campos={campos} />} />
 
       <div className="mb-4 rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-900">
         <strong>PMOC.</strong> Os planos do tipo PMOC geram ordens com o checklist da
@@ -22,7 +37,7 @@ export default async function Planos() {
         compressor e vazão de ar exterior de renovação.
       </div>
 
-      <Tabela cols={["Plano", "Tipo", "Periodicidade", "Prédio", "Contratada", "Checklist / Norma", "Próxima execução", "SLA (h)", "Custo estimado"]}
+      <Tabela cols={["Plano", "Tipo", "Periodicidade", "Prédio", "Contratada", "Checklist / Norma", "Próxima execução", "SLA (h)", "Custo estimado", ""]}
               vazio={lista.length === 0}>
         {lista.map((p: any) => {
           const proximo = p.proxima_execucao &&
@@ -41,6 +56,12 @@ export default async function Planos() {
               <Td className="whitespace-nowrap tabular-nums">{data(p.proxima_execucao)}</Td>
               <Td className="tabular-nums">{p.prazo_sla_horas}</Td>
               <Td className="tabular-nums">{p.custo_estimado ? brl(p.custo_estimado) : null}</Td>
+              <Td>
+                {podeEditar && (
+                  <Cadastro entidade="plano" titulo="Plano" campos={campos} registro={p}
+                            gatilho="Editar" variante="discreto" />
+                )}
+              </Td>
             </tr>
           );
         })}

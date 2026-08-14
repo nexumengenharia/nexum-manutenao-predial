@@ -3,6 +3,7 @@ import { contexto } from "@/lib/sessao";
 import * as q from "@/lib/servicos/consultas";
 import { num, dataHora, rotulo } from "@/lib/fmt";
 import { Titulo, Selo, Tabela, Td, Cartao } from "@/components/ui";
+import FiltroColuna from "@/components/filtro-coluna";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,8 @@ export const dynamic = "force-dynamic";
    completa e auditavel, inclusive dos ja encerrados e convertidos em ordem. */
 
 const SITUACOES = ["ABERTA", "TRIAGEM", "EM_EXECUCAO", "CONCLUIDA", "CONVERTIDA", "CANCELADA"];
+const PRIORIDADES = ["URGENTE", "ALTA", "MEDIA", "BAIXA"];
+const op = (vs: string[]) => vs.map((v) => ({ v, t: rotulo(v) }));
 
 export default async function Solicitacoes({ searchParams }: { searchParams: Promise<any> }) {
   const sp = await searchParams;
@@ -18,7 +21,10 @@ export default async function Solicitacoes({ searchParams }: { searchParams: Pro
   const situacao = sp.situacao && SITUACOES.includes(sp.situacao) ? sp.situacao : undefined;
   const ponto = typeof sp.ponto === "string" && /^[0-9a-f-]{36}$/i.test(sp.ponto) ? sp.ponto : undefined;
 
-  const lista = (await q.listarSolicitacoes(ctx, situacao, ponto)) as any[];
+  const prioridade = PRIORIDADES.includes(sp.prioridade) ? sp.prioridade : undefined;
+
+  const listaBruta = (await q.listarSolicitacoes(ctx, situacao, ponto)) as any[];
+  const lista = prioridade ? listaBruta.filter((s) => s.prioridade === prioridade) : listaBruta;
 
   const conta = (s: string) => lista.filter((x) => x.situacao === s).length;
   const porQr = lista.filter((x) => x.origem === "QRCODE").length;
@@ -70,11 +76,18 @@ export default async function Solicitacoes({ searchParams }: { searchParams: Pro
         ))}
       </div>
 
-      <Tabela cols={["Número", "Título", "Situação", "Prioridade", "Origem", "Solicitante", "Prédio / Setor", "Ativo", "Aberta em", "Ordem gerada"]}
+      <Tabela cols={[
+                "Número", "Título",
+                <FiltroColuna key="situacao" campo="situacao" rotulo="Situação" opcoes={op(SITUACOES)} />,
+                <FiltroColuna key="prioridade" campo="prioridade" rotulo="Prioridade" opcoes={op(PRIORIDADES)} />,
+                "Origem", "Solicitante", "Prédio / Setor", "Ativo", "Aberta em", "Ordem gerada",
+              ]}
               vazio={lista.length === 0}>
         {lista.map((s) => (
           <tr key={s.id} className="hover:bg-slate-50">
-            <Td className="font-mono text-xs">{s.numero}</Td>
+            <Td className="font-mono text-xs">
+              <Link href={`/solicitacoes/${s.id}`} className="text-marinho-700 hover:underline">{s.numero}</Link>
+            </Td>
             <Td className="max-w-[260px] truncate">{s.titulo}</Td>
             <Td><Selo v={s.situacao} /></Td>
             <Td><Selo v={s.prioridade} /></Td>
