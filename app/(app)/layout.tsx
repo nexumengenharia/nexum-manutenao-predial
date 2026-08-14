@@ -3,7 +3,7 @@ import { exigirSessao } from "@/lib/sessao";
 import { pode } from "@/lib/auth";
 import { BotaoTema, BotaoMenu } from "@/components/chrome";
 
-type Item = { href: string; rotulo: string; acao?: string; icone: React.ReactNode };
+type Item = { href: string; rotulo: string; acao?: string; icone: React.ReactNode; passo?: string };
 
 const I = (d: string) => (
   <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0" fill="none"
@@ -12,16 +12,19 @@ const I = (d: string) => (
   </svg>
 );
 
-const GRUPOS: { titulo: string; itens: Item[] }[] = [
+const GRUPOS: { titulo: string; itens: Item[]; fluxo?: boolean }[] = [
   { titulo: "Visão geral", itens: [
     { href: "/",           rotulo: "Painel do gestor",    icone: I("M3 12l9-9 9 9M5 10v10h14V10") },
     { href: "/carteira",   rotulo: "Carteira de serviços", icone: I("M3 7h18v13H3zM8 7V4h8v3") },
     { href: "/relatorios", rotulo: "Relatórios",           icone: I("M4 19V5m0 14h16M8 15V9m4 6V7m4 8v-4") },
   ]},
-  { titulo: "Atendimento", itens: [
-    { href: "/quadro",       rotulo: "Quadro de atividades", icone: I("M4 4h6v16H4zM14 4h6v9h-6z") },
-    { href: "/solicitacoes", rotulo: "Solicitações",         icone: I("M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z") },
-    { href: "/ordens",       rotulo: "Ordens de serviço",    icone: I("M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11") },
+  { titulo: "Fluxo de atendimento", fluxo: true, itens: [
+    { href: "/quadro",       rotulo: "Quadro de atividades", passo: "1 · Entrada — o chamado chega e é triado",
+      icone: I("M4 4h6v16H4zM14 4h6v9h-6z") },
+    { href: "/solicitacoes", rotulo: "Solicitações",         passo: "2 · Conversão — vira Ordem de Serviço",
+      icone: I("M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z") },
+    { href: "/ordens",       rotulo: "Ordens de serviço",    passo: "3 · Execução — equipe executa e conclui",
+      icone: I("M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11") },
   ]},
   { titulo: "Patrimônio", itens: [
     { href: "/ativos",    rotulo: "Ativos",                 icone: I("M20 7l-8-4-8 4 8 4 8-4zM4 12l8 4 8-4M4 17l8 4 8-4") },
@@ -97,19 +100,52 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
                               [.menu-recolhido_&]:sr-only">
                   {g.titulo}
                 </p>
-                <ul className="space-y-0.5">
-                  {g.itens.map((m) => (
-                    <li key={m.href}>
-                      <Link href={m.href} title={m.rotulo}
-                        className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-slate-700 transition
-                                   hover:bg-white hover:text-marinho-800 hover:shadow-sm
-                                   [.menu-recolhido_&]:justify-center [.menu-recolhido_&]:px-0">
-                        {m.icone}
-                        <span className="truncate [.menu-recolhido_&]:hidden">{m.rotulo}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+
+                {g.fluxo ? (
+                  // Fluxo de atendimento: passos numerados de cima para baixo,
+                  // ligados por uma linha vertical — entrada -> conversao em
+                  // OS -> execucao, na ordem em que o chamado realmente anda.
+                  <ol className="relative space-y-0.5 [.menu-recolhido_&]:space-y-1.5">
+                    {g.itens.map((m, i) => (
+                      <li key={m.href} className="relative">
+                        {i < g.itens.length - 1 && (
+                          <span aria-hidden
+                            className="absolute left-[19px] top-9 h-[calc(100%-0.5rem)] w-px bg-slate-300
+                                       [.menu-recolhido_&]:left-1/2 [.menu-recolhido_&]:top-8" />
+                        )}
+                        <Link href={m.href} title={m.rotulo}
+                          className="group relative flex items-start gap-2.5 rounded-md px-3 py-2 text-sm text-slate-700 transition
+                                     hover:bg-white hover:text-marinho-800 hover:shadow-sm
+                                     [.menu-recolhido_&]:justify-center [.menu-recolhido_&]:px-0">
+                          <span aria-hidden
+                            className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full
+                                       bg-marinho-100 text-[10px] font-bold text-marinho-800
+                                       group-hover:bg-marinho-700 group-hover:text-white">
+                            {i + 1}
+                          </span>
+                          <span className="min-w-0 flex-1 [.menu-recolhido_&]:hidden">
+                            <span className="block truncate">{m.rotulo}</span>
+                            {m.passo && <span className="block truncate text-[11px] text-slate-400">{m.passo}</span>}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {g.itens.map((m) => (
+                      <li key={m.href}>
+                        <Link href={m.href} title={m.rotulo}
+                          className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-slate-700 transition
+                                     hover:bg-white hover:text-marinho-800 hover:shadow-sm
+                                     [.menu-recolhido_&]:justify-center [.menu-recolhido_&]:px-0">
+                          {m.icone}
+                          <span className="truncate [.menu-recolhido_&]:hidden">{m.rotulo}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ))}
           </div>
