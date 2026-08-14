@@ -3,7 +3,7 @@ import { contexto } from "@/lib/sessao";
 import { consultar } from "@/lib/db";
 import { brl, num, data, rotulo } from "@/lib/fmt";
 import { Titulo, Selo } from "@/components/ui";
-import { IconeCategoria, catCor, CORES_CATEGORIA } from "@/components/icones";
+import { IconeCategoria, catCor } from "@/components/icones";
 import Cadastro from "@/components/cadastro";
 import { camposAtivo } from "@/components/campos";
 import { pode } from "@/lib/auth";
@@ -21,7 +21,6 @@ export default async function Ativos({ searchParams }: { searchParams: Promise<a
   const busca = (sp.q ?? "").trim();
   const predio = sp.predio ?? null;
   const situacao = sp.situacao ?? null;
-  const agrupar = "predio";
 
   const [linhas, predios] = await Promise.all([
     consultar(ctx, `
@@ -92,17 +91,14 @@ export default async function Ativos({ searchParams }: { searchParams: Promise<a
       </form>
 
       {[...grupos.entries()].map(([chave, itens]) => {
-        const c = agrupar === "categoria" ? catCor(chave) : { bg: "#e2e8f0", fg: "#1e3a5f", nome: chave };
         const custoGrupo = itens.reduce((s, a) => s + Number(a.custo_total ?? 0), 0);
         return (
           <section key={chave}>
             <header className="mb-2.5 flex items-center gap-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-lg p-1.5" style={{ background: c.bg }}>
-                <IconeCategoria categoria={agrupar === "categoria" ? chave : "OUTRO"} className="block h-full w-full" />
+              <span className="grid h-8 w-8 place-items-center rounded-lg p-1.5" style={{ background: "#e2e8f0" }}>
+                <IconeCategoria categoria="OUTRO" className="block h-full w-full" />
               </span>
-              <h2 className="text-sm font-semibold text-marinho-900">
-                {agrupar === "categoria" ? (CORES_CATEGORIA[chave]?.nome ?? rotulo(chave)) : chave}
-              </h2>
+              <h2 className="text-sm font-semibold text-marinho-900">{chave}</h2>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-600">
                 {itens.length}
               </span>
