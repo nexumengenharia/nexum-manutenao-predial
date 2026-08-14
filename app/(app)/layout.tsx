@@ -55,7 +55,7 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
       <a href="#conteudo" className="pular-para-conteudo">Pular para o conteúdo</a>
 
       <header className="nao-imprimir sticky top-0 z-40 border-b border-marinho-800 bg-marinho-900 text-white">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3 px-3 py-2.5 sm:px-4">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5 sm:px-5">
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <BotaoMenu />
             <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded bg-institucional-500 text-sm font-bold text-marinho-900">
@@ -84,7 +84,7 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-[1600px] gap-4 px-3 py-5 sm:px-4 sm:py-6 lg:gap-6">
+      <div className="flex gap-4 px-3 py-5 sm:px-5 sm:py-6 lg:gap-6 2xl:px-8">
         {/* Menu lateral. A largura muda via classe no <html> (menu-recolhido),
             aplicada antes da primeira pintura — ver components/chrome.tsx. */}
         <nav aria-label="Menu principal"

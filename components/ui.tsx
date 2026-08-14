@@ -140,12 +140,12 @@ export function Painel({ titulo, children, acao }: {
   titulo: string; children: React.ReactNode; acao?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">{titulo}</h2>
+    <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="min-w-0 truncate text-sm font-semibold uppercase tracking-wide text-slate-600">{titulo}</h2>
         {acao}
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }

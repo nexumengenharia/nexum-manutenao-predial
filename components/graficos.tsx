@@ -55,8 +55,8 @@ export function Rosca({
   const ir = (href?: string) => { if (href) router.push(href); };
 
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
-      <svg viewBox="0 0 160 160" className="h-40 w-40 shrink-0" role="img"
+    <div className="flex min-w-0 flex-col items-center gap-4 sm:flex-row sm:items-center">
+      <svg viewBox="0 0 160 160" className="h-32 w-32 shrink-0 lg:h-40 lg:w-40" role="img"
            aria-label={titulo ?? "Distribuição"}>
         {arcos.map((a) => (
           <path key={a.rotulo} d={a.d} fill={a.cor}
@@ -74,19 +74,19 @@ export function Rosca({
         </text>
       </svg>
 
-      <ul className="w-full space-y-1">
+      <ul className="w-full min-w-0 space-y-1">
         {arcos.map((a) => (
-          <li key={a.rotulo}>
+          <li key={a.rotulo} className="min-w-0">
             <button type="button" disabled={!a.href}
               onMouseEnter={() => setAtivo(a.i)} onMouseLeave={() => setAtivo(null)}
               onClick={() => ir(a.href)}
-              className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm transition
+              className={`flex w-full min-w-0 items-center gap-2 rounded px-2 py-1 text-left text-sm transition
                 ${a.href ? "hover:bg-slate-100" : "cursor-default"}
                 ${ativo === a.i ? "bg-slate-100" : ""}`}>
               <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: a.cor }} />
               <span className="min-w-0 flex-1 truncate text-slate-700">{a.rotulo}</span>
               <span className="shrink-0 tabular-nums font-medium text-slate-900">{fmtValor(a.valor, formato)}</span>
-              <span className="w-12 shrink-0 text-right tabular-nums text-xs text-slate-500">
+              <span className="hidden w-12 shrink-0 text-right tabular-nums text-xs text-slate-500 min-[420px]:block">
                 {num(a.pct, 1)}%
               </span>
             </button>
@@ -109,12 +109,12 @@ export function BarrasNav({
   if (!dados.length) return <p className="py-8 text-center text-sm text-slate-500">Sem dados.</p>;
 
   return (
-    <ul className="space-y-2.5">
+    <ul className="min-w-0 space-y-2.5">
       {dados.map((d) => {
         const conteudo = (
           <>
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="truncate text-slate-700 group-hover:text-marinho-800">{d.rotulo}</span>
+            <div className="flex min-w-0 items-baseline justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate text-slate-700 group-hover:text-marinho-800">{d.rotulo}</span>
               <span className="shrink-0 font-semibold tabular-nums text-slate-900">
                 {fmtValor(d.valor, formato)}
               </span>
@@ -127,14 +127,14 @@ export function BarrasNav({
           </>
         );
         return (
-          <li key={d.rotulo}>
+          <li key={d.rotulo} className="min-w-0">
             {d.href ? (
               <button type="button" onClick={() => router.push(d.href!)}
-                className="group w-full rounded px-1 py-0.5 text-left hover:bg-slate-50">
+                className="group w-full min-w-0 rounded px-1 py-0.5 text-left hover:bg-slate-50">
                 {conteudo}
               </button>
             ) : (
-              <div className="px-1 py-0.5">{conteudo}</div>
+              <div className="min-w-0 px-1 py-0.5">{conteudo}</div>
             )}
           </li>
         );
