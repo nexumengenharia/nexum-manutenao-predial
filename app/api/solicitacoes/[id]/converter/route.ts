@@ -27,10 +27,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let corpo: any;
   try { corpo = await req.json(); } catch { return NextResponse.json({ erro: "Requisição inválida." }, { status: 400 }); }
 
-  const { tipo, titulo, descricao, prioridade, contratadaId, ativoId, prazoHoras, custoEstimado } = corpo ?? {};
+  const { tipo, titulo, descricao, prioridade, contratadaId, ativoId, prazoHoras, custoEstimado, execucao } = corpo ?? {};
   if (!tipo || !titulo) {
     return NextResponse.json({ erro: "Preencha o tipo e o título da OS." }, { status: 400 });
   }
+  const execValidos = ["INTERNA_MANUTENCAO", "INTERNA_ZELADORIA", "EXTERNA"];
+  const execFinal = execucao && execValidos.includes(execucao) ? execucao : null;
 
   try {
     const r = await criarOrdem(ctx, {
@@ -40,6 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       prioridade: prioridade || sol.prioridade || "MEDIA",
       prazoHoras: prazoHoras ? Number(prazoHoras) : null,
       custoEstimado: custoEstimado ? Number(custoEstimado) : null,
+      execucao: execFinal as any,
     });
     return NextResponse.json({ ok: true, ...r });
   } catch (e: any) {

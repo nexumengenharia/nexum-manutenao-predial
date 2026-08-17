@@ -1,0 +1,5 @@
+-- Migration cancelada: a tabela manutencao.abastecimento ja existe desde a
+-- migration inicial de frota. O modulo novo usa ela diretamente (colunas
+-- ocorrido_em, hodometro, litros, valor_total, observacoes).
+--
+-- Este arquivo fica so como marcador; nao precisa rodar nada.

@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { contexto } from "@/lib/sessao";
-import { consultar, consultarUm } from "@/lib/db";
+import { consultarUm } from "@/lib/db";
 import { pode } from "@/lib/auth";
-import { num, data, dataHora, rotulo } from "@/lib/fmt";
+import { dataHora, rotulo } from "@/lib/fmt";
 import { Titulo, Painel, Selo, Campo } from "@/components/ui";
-import Triagem from "./triagem";
-import Converter from "./converter";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +29,6 @@ export default async function Solicitacao({ params }: { params: Promise<{ id: st
       left join manutencao.ordem o on o.id = s.ordem_id
      where s.id = $1 and s.tenant_id = manutencao.tenant_atual() and s.excluido_em is null`, [id]);
   if (!s) notFound();
-
-  const [contratadas, ativos] = await Promise.all([
-    consultar(ctx, `select id, razao_social as nome from manutencao.contratada
-                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by razao_social`),
-    consultar(ctx, `select id, nome from manutencao.ativo
-                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by nome`),
-  ]);
 
   const podeTriar = pode(ctx.sessao.papel, "solicitacao.triar");
   const jaConvertida = Boolean(s.ordem_id);
@@ -79,32 +70,27 @@ export default async function Solicitacao({ params }: { params: Promise<{ id: st
         </Painel>
 
         <div className="space-y-4">
-          <Painel titulo="Triagem">
+          <Painel titulo="Situação">
             {jaConvertida ? (
               <p className="text-sm text-slate-600">
-                Esta solicitação já foi triada e convertida em{" "}
+                Já triada e convertida em{" "}
                 <Link href={`/ordens/${s.ordem_id}`} className="font-medium text-marinho-700 hover:underline">
                   {s.ordem_numero}
                 </Link>.
               </p>
             ) : podeTriar ? (
-              <Triagem id={s.id} prioridadeAtual={s.prioridade} />
+              <div className="space-y-2">
+                <p className="text-sm text-slate-600">Esta solicitação ainda não foi triada.</p>
+                <Link href={`/quadro?sel=${s.id}`}
+                  className="inline-block rounded-md bg-marinho-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-marinho-800">
+                  Triar no Quadro de atividades
+                </Link>
+              </div>
             ) : (
-              <p className="text-sm text-slate-500">Seu perfil não tem permissão para triar chamados.</p>
+              <p className="text-sm text-slate-500">Aguardando triagem.</p>
             )}
           </Painel>
 
-          {!jaConvertida && podeTriar && (
-            <Painel titulo="Converter em Ordem de Serviço">
-              <p className="mb-3 text-xs text-slate-500">
-                Cria a OS formal vinculada a esta solicitação, com número próprio, descrição técnica e prazo.
-                A solicitação sai do quadro assim que a OS é criada.
-              </p>
-              <Converter id={s.id} tituloSugerido={s.titulo} descricaoSugerida={s.descricao}
-                         prioridadeSugerida={s.prioridade} contratadas={contratadas as any}
-                         ativos={ativos as any} ativoSugerido={s.ativo_id} />
-            </Painel>
-          )}
         </div>
       </div>
     </div>

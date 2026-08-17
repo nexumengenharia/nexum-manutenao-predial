@@ -1,77 +1,114 @@
 import Link from "next/link";
 import { contexto } from "@/lib/sessao";
-import * as q from "@/lib/servicos/consultas";
-import { num, dataHora, rotulo } from "@/lib/fmt";
+import { consultar } from "@/lib/db";
+import { brl, data, dataHora, rotulo } from "@/lib/fmt";
 import { Titulo, Selo, Tabela, Td, Cartao } from "@/components/ui";
 import FiltroColuna from "@/components/filtro-coluna";
 
 export const dynamic = "force-dynamic";
 
-/* Esta rota estava no menu mas nao existia no codigo — dava 404. Enquanto o
-   Quadro mostra os chamados como cartoes para trabalhar, esta tela e a lista
-   completa e auditavel, inclusive dos ja encerrados e convertidos em ordem. */
+/* Renomeado no menu para "Execucao de servicos". A URL continua /solicitacoes
+   por compatibilidade; a fonte de dados foi trocada: agora sao ORDENS ativas
+   (nao mais os pedidos brutos). O gestor/fiscal e as equipes internas veem
+   tudo; a filtragem por contratada logada ainda depende de vincular usuario
+   a contratada (ver relatorio de auditoria). */
 
-const SITUACOES = ["ABERTA", "TRIAGEM", "EM_EXECUCAO", "CONCLUIDA", "CONVERTIDA", "CANCELADA"];
+const SITUACOES = ["ABERTA", "EM_EXECUCAO", "AGUARDANDO_PECA"];
+const EXECUCAO = ["INTERNA_MANUTENCAO", "INTERNA_ZELADORIA", "EXTERNA"];
 const PRIORIDADES = ["URGENTE", "ALTA", "MEDIA", "BAIXA"];
-const op = (vs: string[]) => vs.map((v) => ({ v, t: rotulo(v) }));
 
-export default async function Solicitacoes({ searchParams }: { searchParams: Promise<any> }) {
+const COR_EXEC: Record<string, string> = {
+  INTERNA_MANUTENCAO: "bg-marinho-100 text-marinho-800 ring-marinho-500/20",
+  INTERNA_ZELADORIA: "bg-cyan-100 text-cyan-900 ring-cyan-600/20",
+  EXTERNA: "bg-amber-100 text-amber-900 ring-amber-600/20",
+};
+const ROT_EXEC: Record<string, string> = {
+  INTERNA_MANUTENCAO: "Interna · Manutenção",
+  INTERNA_ZELADORIA: "Interna · Zeladoria",
+  EXTERNA: "Externa",
+};
+
+const op = (vs: string[], mapa?: Record<string, string>) =>
+  vs.map((v) => ({ v, t: (mapa && mapa[v]) || rotulo(v) }));
+
+export default async function Execucao({ searchParams }: { searchParams: Promise<any> }) {
   const sp = await searchParams;
   const ctx = await contexto();
-  const situacao = sp.situacao && SITUACOES.includes(sp.situacao) ? sp.situacao : undefined;
-  const ponto = typeof sp.ponto === "string" && /^[0-9a-f-]{36}$/i.test(sp.ponto) ? sp.ponto : undefined;
 
+  const situacao = SITUACOES.includes(sp.situacao) ? sp.situacao : undefined;
+  const execucao = EXECUCAO.includes(sp.execucao) ? sp.execucao : undefined;
   const prioridade = PRIORIDADES.includes(sp.prioridade) ? sp.prioridade : undefined;
+  const contratada = typeof sp.contratada === "string" && /^[0-9a-f-]{36}$/i.test(sp.contratada) ? sp.contratada : undefined;
 
-  const listaBruta = (await q.listarSolicitacoes(ctx, situacao, ponto)) as any[];
-  const lista = prioridade ? listaBruta.filter((s) => s.prioridade === prioridade) : listaBruta;
+  const [lista, contratadas] = await Promise.all([
+    consultar(ctx, `
+      select o.id, o.numero, o.titulo, o.situacao, o.prioridade, o.tipo, o.execucao,
+             o.aberta_em, o.prazo_em, o.custo_estimado,
+             p.nome as predio, s.nome as setor, a.nome as ativo,
+             c.razao_social as contratada, c.id as contratada_id,
+             u.nome as responsavel,
+             (o.prazo_em is not null and o.prazo_em < now() and o.situacao not in ('CONCLUIDA','CANCELADA')) as atrasada
+        from manutencao.ordem o
+        join manutencao.predio p on p.id = o.predio_id
+        left join manutencao.setor s on s.id = o.setor_id
+        left join manutencao.ativo a on a.id = o.ativo_id
+        left join manutencao.contratada c on c.id = o.contratada_id
+        left join manutencao.usuario u on u.id = o.responsavel_id
+       where o.excluido_em is null and o.tenant_id = manutencao.tenant_atual()
+         and o.situacao in ('ABERTA','EM_EXECUCAO','AGUARDANDO_PECA')
+         and ($1::text is null or o.situacao = $1)
+         and ($2::text is null or o.execucao = $2)
+         and ($3::text is null or o.prioridade = $3)
+         and ($4::uuid is null or o.contratada_id = $4::uuid)
+       order by (o.prazo_em < now()) desc,
+                array_position(array['URGENTE','ALTA','MEDIA','BAIXA'], o.prioridade),
+                o.aberta_em asc`,
+      [situacao ?? null, execucao ?? null, prioridade ?? null, contratada ?? null]),
+    consultar(ctx, `select id, razao_social from manutencao.contratada
+                      where excluido_em is null and tenant_id = manutencao.tenant_atual() order by razao_social`),
+  ]);
 
-  const conta = (s: string) => lista.filter((x) => x.situacao === s).length;
-  const porQr = lista.filter((x) => x.origem === "QRCODE").length;
-  const convertidas = lista.filter((x) => x.ordem_id).length;
+  const conta = (s: string) => lista.filter((x: any) => x.situacao === s).length;
+  const contaExec = (e: string) => lista.filter((x: any) => x.execucao === e).length;
+  const atrasadas = lista.filter((x: any) => x.atrasada).length;
+  const custoComp = lista.reduce((s: number, x: any) => s + Number(x.custo_estimado ?? 0), 0);
+
+  const filtros = [
+    situacao && `situação: ${rotulo(situacao)}`,
+    execucao && `execução: ${ROT_EXEC[execucao]}`,
+    prioridade && `prioridade: ${rotulo(prioridade)}`,
+    contratada && `contratada`,
+  ].filter(Boolean);
 
   return (
     <div className="space-y-5">
-      <Titulo titulo="Solicitações"
-        sub={`${lista.length} chamado(s)${situacao ? ` em ${rotulo(situacao)}` : " nos registros recentes"}`
-          + `${ponto && lista[0]?.ponto ? ` · ponto: ${lista[0].ponto}` : ""} — ${ctx.sessao.tribunal}`}
-        acao={
-          <div className="flex items-center gap-2">
-            {ponto && (
-              <Link href="/solicitacoes"
-                className="rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-white">
-                Remover filtro de ponto
-              </Link>
-            )}
-            <Link href="/quadro"
-              className="rounded-md bg-marinho-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-marinho-800">
-              Abrir o quadro
-            </Link>
-          </div>
-        } />
+      <Titulo titulo="Execução de serviços"
+        sub={`${lista.length} OS ativa(s)${filtros.length ? ` · ${filtros.join(" · ")}` : ""} — ${ctx.sessao.tribunal}`}
+        acao={filtros.length ? (
+          <Link href="/solicitacoes" className="rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-white">
+            Limpar filtros
+          </Link>
+        ) : undefined} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Cartao titulo="Aguardando triagem" valor={num(conta("ABERTA") + conta("TRIAGEM"))}
-                tom={conta("ABERTA") + conta("TRIAGEM") > 0 ? "alerta" : "bom"}
-                detalhe="ainda sem equipe atuando" />
-        <Cartao titulo="Em execução" valor={num(conta("EM_EXECUCAO"))} detalhe="equipe já atuando" />
-        <Cartao titulo="Viraram ordem de serviço" valor={num(convertidas)}
-                detalhe="chamados que geraram OS formal" />
-        <Cartao titulo="Abertas por QR Code" valor={num(porQr)}
-                detalhe="registradas pelo próprio usuário do prédio" />
+        <Cartao titulo="Abertas" valor={conta("ABERTA")} detalhe="ainda sem começar" />
+        <Cartao titulo="Em execução" valor={conta("EM_EXECUCAO")} detalhe="equipe atuando" />
+        <Cartao titulo="Aguardando peça" valor={conta("AGUARDANDO_PECA")}
+                tom={conta("AGUARDANDO_PECA") > 0 ? "alerta" : "neutro"} detalhe="material a caminho" />
+        <Cartao titulo="Fora do prazo" valor={atrasadas}
+                tom={atrasadas > 0 ? "critico" : "bom"} detalhe={brl(custoComp) + " comprometido"} />
       </div>
 
-      <div className="nao-imprimir flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2">
         <Link href="/solicitacoes"
-          className={`rounded-full px-3 py-1.5 text-xs font-medium transition
-            ${!situacao ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
-          Todas
+          className={`rounded-full px-3 py-1.5 text-xs font-medium ${!execucao ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+          Todas ({lista.length})
         </Link>
-        {SITUACOES.map((s) => (
-          <Link key={s} href={`/solicitacoes?situacao=${s}`}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition
-              ${situacao === s ? "bg-marinho-700 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
-            {rotulo(s)}
+        {EXECUCAO.map((e) => (
+          <Link key={e} href={`/solicitacoes?execucao=${e}`}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-inset ${
+              execucao === e ? "bg-marinho-700 text-white ring-marinho-700" : COR_EXEC[e]}`}>
+            {ROT_EXEC[e]} ({contaExec(e)})
           </Link>
         ))}
       </div>
@@ -80,38 +117,41 @@ export default async function Solicitacoes({ searchParams }: { searchParams: Pro
                 "Número", "Título",
                 <FiltroColuna key="situacao" campo="situacao" rotulo="Situação" opcoes={op(SITUACOES)} />,
                 <FiltroColuna key="prioridade" campo="prioridade" rotulo="Prioridade" opcoes={op(PRIORIDADES)} />,
-                "Origem", "Solicitante", "Prédio / Setor", "Ativo", "Aberta em", "Ordem gerada",
+                <FiltroColuna key="execucao" campo="execucao" rotulo="Execução" opcoes={op(EXECUCAO, ROT_EXEC)} />,
+                "Prédio", "Ativo",
+                <FiltroColuna key="contratada" campo="contratada" rotulo="Contratada"
+                  opcoes={(contratadas as any[]).map((c) => ({ v: c.id, t: c.razao_social }))} />,
+                "Prazo",
               ]}
               vazio={lista.length === 0}>
-        {lista.map((s) => (
-          <tr key={s.id} className="hover:bg-slate-50">
+        {(lista as any[]).map((o) => (
+          <tr key={o.id} className={o.atrasada ? "bg-red-50/60 hover:bg-red-50" : "hover:bg-slate-50"}>
             <Td className="font-mono text-xs">
-              <Link href={`/solicitacoes/${s.id}`} className="text-marinho-700 hover:underline">{s.numero}</Link>
+              <Link href={`/ordens/${o.id}`} className="font-medium text-marinho-700 hover:underline">{o.numero}</Link>
             </Td>
-            <Td className="max-w-[260px] truncate">{s.titulo}</Td>
-            <Td><Selo v={s.situacao} /></Td>
-            <Td><Selo v={s.prioridade} /></Td>
+            <Td className="max-w-[260px] truncate">
+              <Link href={`/ordens/${o.id}`} className="hover:underline">{o.titulo}</Link>
+            </Td>
+            <Td><Selo v={o.situacao} /></Td>
+            <Td><Selo v={o.prioridade} /></Td>
             <Td>
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset
-                ${s.origem === "QRCODE"
-                  ? "bg-cyan-100 text-cyan-900 ring-cyan-600/20"
-                  : "bg-slate-100 text-slate-600 ring-slate-500/20"}`}>
-                {s.origem === "QRCODE" ? "QR" : rotulo(s.origem)}
+              {o.execucao ? (
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${COR_EXEC[o.execucao]}`}>
+                  {ROT_EXEC[o.execucao]}
+                </span>
+              ) : <span className="text-slate-400">—</span>}
+            </Td>
+            <Td>
+              <span className="block max-w-[180px] truncate">{o.predio}</span>
+              <span className="block max-w-[180px] truncate text-xs text-slate-500">{o.setor}</span>
+            </Td>
+            <Td className="max-w-[160px] truncate text-xs">{o.ativo}</Td>
+            <Td className="max-w-[160px] truncate text-xs">{o.contratada}</Td>
+            <Td className="whitespace-nowrap tabular-nums text-xs">
+              {o.prazo_em ? data(o.prazo_em) : "—"}
+              <span className={`ml-1 block text-[10px] ${o.atrasada ? "font-bold text-red-700" : "text-slate-400"}`}>
+                aberta em {dataHora(o.aberta_em)}
               </span>
-            </Td>
-            <Td className="max-w-[160px] truncate text-xs">{s.solicitante_nome}</Td>
-            <Td>
-              <span className="block max-w-[180px] truncate">{s.predio}</span>
-              <span className="block max-w-[180px] truncate text-xs text-slate-500">{s.setor}</span>
-            </Td>
-            <Td className="max-w-[160px] truncate text-xs">{s.ativo}</Td>
-            <Td className="whitespace-nowrap text-xs">{dataHora(s.criado_em)}</Td>
-            <Td>
-              {s.ordem_id
-                ? <Link href={`/ordens/${s.ordem_id}`} className="font-medium text-marinho-700 hover:underline">
-                    {s.ordem_numero}
-                  </Link>
-                : <span className="text-slate-400">—</span>}
             </Td>
           </tr>
         ))}

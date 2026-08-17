@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { contexto } from "@/lib/sessao";
 import { consultar } from "@/lib/db";
-import { brl, num, dataHora, rotulo } from "@/lib/fmt";
-import { Selo, Titulo, Painel } from "@/components/ui";
+import { brl, num } from "@/lib/fmt";
+import { Titulo, Painel } from "@/components/ui";
 import { BarrasNav } from "@/components/graficos";
 
 export const dynamic = "force-dynamic";
@@ -91,47 +91,18 @@ export default async function Carteira({ searchParams }: { searchParams: Promise
         </div>
       </div>
 
-      <div className="space-y-2">
-        {linhas.map((o: any) => (
-          <Link key={o.id} href={`/ordens/${o.id}`}
-            className={`block rounded-xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md
-              ${o.vencida ? "border-l-4 border-l-red-500 border-slate-200" : "border-slate-200"}`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-slate-500">{o.numero}</span>
-                  <Selo v={o.tipo} /><Selo v={o.situacao} /><Selo v={o.prioridade} />
-                  {o.vencida && (
-                    <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-                      {num(o.dias_vencida, 0)} dias de atraso
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1.5 font-medium text-slate-800">{o.titulo}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {o.predio}{o.setor ? ` · ${o.setor}` : ""}{o.ativo ? ` · ${o.ativo}` : ""}
-                  {o.contratada ? ` · ${o.contratada}` : ""}
-                  {o.responsavel ? ` · resp. ${o.responsavel}` : ""}
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-lg font-bold tabular-nums text-marinho-900">{brl(o.custo_estimado)}</p>
-                <p className="text-xs text-slate-500">aberta há {num(o.dias_aberta, 0)} dias</p>
-                <p className="text-[11px] text-slate-400">prazo {dataHora(o.prazo_em)}</p>
-              </div>
-            </div>
-            <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
-              <div className={`h-full rounded-full ${o.vencida ? "bg-red-500" : "bg-marinho-600"}`}
-                   style={{ width: `${Math.min(100, (Number(o.dias_aberta) / 45) * 100)}%` }} />
-            </div>
+      <Painel titulo="Ver a lista de ordens">
+        <p className="text-sm text-slate-600">
+          Para trabalhar as ordens em andamento, use a aba{" "}
+          <Link href="/solicitacoes" className="font-semibold text-marinho-700 hover:underline">
+            Execução de serviços
           </Link>
-        ))}
-        {linhas.length === 0 && (
-          <p className="rounded-xl border border-slate-200 bg-white py-12 text-center text-slate-500">
-            Nenhuma ordem em aberto. Carteira zerada.
-          </p>
-        )}
-      </div>
+          . Para auditar a lista completa (concluídas e canceladas inclusive), abra{" "}
+          <Link href="/ordens?atraso=1" className="font-semibold text-marinho-700 hover:underline">
+            Ordens de serviço filtradas por atraso
+          </Link>.
+        </p>
+      </Painel>
     </div>
   );
 }

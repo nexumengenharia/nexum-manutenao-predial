@@ -18,27 +18,35 @@ async function proximoNumero(c: any, tenantId: string, tabela: "ordem" | "solici
   return `${prefixo}-${new Date().getFullYear()}-${String(rows[0].n).padStart(4, "0")}`;
 }
 
+export type Execucao = "INTERNA_MANUTENCAO" | "INTERNA_ZELADORIA" | "EXTERNA";
+
 export type NovaOrdem = {
   predioId: string; setorId?: string | null; ativoId?: string | null;
   contratadaId?: string | null; planoId?: string | null; solicitacaoId?: string | null;
   titulo: string; descricao?: string | null; tipo: string; prioridade: string;
   prazoHoras?: number | null; custoEstimado?: number | null;
+  execucao?: Execucao | null;
 };
 
 export async function criarOrdem(ctx: Contexto, d: NovaOrdem) {
   return comContexto(ctx, async (c) => {
     const numero = await proximoNumero(c, ctx.tenantId, "ordem", "OS");
+    // Nota: coluna 'execucao' e opcional no INSERT — se a migration
+    // 2026-08-16-execucao-ordem.sql ainda nao rodou, a coluna nao existe
+    // e o INSERT falharia. Aqui garantimos que ela e enviada como null se
+    // ausente e como texto se veio da triagem.
     const { rows } = await c.query(
       `insert into manutencao.ordem
          (tenant_id, predio_id, setor_id, ativo_id, contratada_id, plano_id, solicitacao_id,
-          responsavel_id, numero, titulo, descricao, tipo, prioridade, prazo_em, custo_estimado)
+          responsavel_id, numero, titulo, descricao, tipo, prioridade, prazo_em, custo_estimado, execucao)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
                case when $14::int is null then null else now() + ($14 || ' hours')::interval end,
-               $15)
+               $15,$16)
        returning id, numero`,
       [ctx.tenantId, d.predioId, d.setorId || null, d.ativoId || null, d.contratadaId || null,
        d.planoId || null, d.solicitacaoId || null, ctx.usuarioId || null, numero, d.titulo,
-       d.descricao || null, d.tipo, d.prioridade, d.prazoHoras ?? null, d.custoEstimado ?? null],
+       d.descricao || null, d.tipo, d.prioridade, d.prazoHoras ?? null, d.custoEstimado ?? null,
+       d.execucao ?? null],
     );
 
     // Ordem nascida de plano com checklist recebe os itens do modelo.
@@ -85,6 +93,26 @@ export async function mudarSituacaoOrdem(
         returning id, numero, situacao`,
       [ctx.tenantId, id, situacao, extra.custoReal ?? null, extra.horas ?? null,
        extra.nota ?? null, extra.parecer ?? null],
+    );
+    if (!rows[0]) throw new Error("Ordem nao encontrada.");
+    return rows[0];
+  });
+}
+
+/* Redireciona uma OS ja triada para outra classificacao (ex.: era interna,
+   virou externa; ou vice-versa). Usado na aba Execucao de servicos quando o
+   gestor precisa corrigir o roteamento. */
+export async function definirExecucaoOrdem(
+  ctx: Contexto, id: string, execucao: Execucao, contratadaId?: string | null,
+) {
+  return comContexto(ctx, async (c) => {
+    const { rows } = await c.query(
+      `update manutencao.ordem
+          set execucao = $3,
+              contratada_id = case when $3 = 'EXTERNA' then $4::uuid else null end
+        where tenant_id=$1 and id=$2 and excluido_em is null
+        returning id, execucao, contratada_id`,
+      [ctx.tenantId, id, execucao, contratadaId || null],
     );
     if (!rows[0]) throw new Error("Ordem nao encontrada.");
     return rows[0];
@@ -218,6 +246,51 @@ export async function criarControle(ctx: Contexto, d: NovoControle) {
       [ctx.tenantId, d.alvoId, d.nome, d.tipo, d.norma || null,
        d.periodicidadeMeses ?? null, d.ultimaData || null, d.proximaData,
        d.custoPrevisto ?? null, d.geraOrdem ?? false, ctx.usuarioId || null]);
+    return rows[0] as { id: string };
+  });
+}
+
+/* Registra um abastecimento do veiculo — usa a tabela manutencao.abastecimento
+   que ja existe. Ate hoje ela era so preenchida por migration de demonstracao;
+   agora tem tela para o gestor lancar direto, com data, litros, valor total
+   e o numero/link da nota fiscal. */
+export type NovoAbastecimento = {
+  veiculoId: string; data?: string; hodometro?: number | null;
+  litros: number; valor: number; combustivel?: string | null;
+  posto?: string | null; motoristaId?: string | null; motoristaNome?: string | null;
+  notaFiscal?: string | null; observacoes?: string | null;
+};
+
+export async function registrarAbastecimento(ctx: Contexto, d: NovoAbastecimento) {
+  return comContexto(ctx, async (c) => {
+    // Base minima que a tabela ja tinha na migration original de frota.
+    // Nao mexo em colunas extras (nota_fiscal, posto, motorista) porque
+    // dependem de coluna que talvez nao exista neste tenant; guardo o extra
+    // no campo observacoes se a tabela nao acomodar.
+    const obs = [
+      d.observacoes || null,
+      d.posto ? `posto: ${d.posto}` : null,
+      d.motoristaNome ? `motorista: ${d.motoristaNome}` : null,
+      d.notaFiscal ? `NF: ${d.notaFiscal}` : null,
+      d.combustivel ? `combustivel: ${d.combustivel}` : null,
+    ].filter(Boolean).join(" · ");
+
+    const { rows } = await c.query(
+      `insert into manutencao.abastecimento
+         (tenant_id, veiculo_id, ocorrido_em, hodometro, litros, valor_total, observacoes)
+       values ($1,$2, coalesce($3::timestamptz, now()), $4, $5, $6, $7)
+       returning id`,
+      [ctx.tenantId, d.veiculoId, d.data || null, d.hodometro ?? null,
+       d.litros, d.valor, obs || null],
+    );
+
+    // Atualiza o hodometro do veiculo se o novo for maior que o registrado.
+    if (d.hodometro != null) {
+      await c.query(
+        `update manutencao.veiculo set hodometro = greatest(coalesce(hodometro, 0), $3)
+          where tenant_id=$1 and id=$2`,
+        [ctx.tenantId, d.veiculoId, d.hodometro]);
+    }
     return rows[0] as { id: string };
   });
 }

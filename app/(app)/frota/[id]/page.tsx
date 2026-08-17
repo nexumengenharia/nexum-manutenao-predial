@@ -7,6 +7,8 @@ import { brl, num, data, dataHora, rotulo } from "@/lib/fmt";
 import { Titulo, Painel, Selo, Campo } from "@/components/ui";
 import { Serie } from "@/components/graficos";
 import Mapa from "@/components/mapa";
+import { pode } from "@/lib/auth";
+import Abastecer from "./abastecer";
 
 export const dynamic = "force-dynamic";
 
@@ -214,7 +216,8 @@ export default async function Veiculo({ params }: { params: Promise<{ id: string
           ) : <p className="py-10 text-center text-sm text-slate-500">Dados insuficientes.</p>}
         </Painel>
 
-        <Painel titulo="Abastecimentos recentes">
+        <Painel titulo="Abastecimentos recentes"
+          acao={pode(ctx.sessao.papel, "frota.gerenciar") ? <Abastecer id={v.id} /> : undefined}>
           <div className="max-h-[280px] overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white">

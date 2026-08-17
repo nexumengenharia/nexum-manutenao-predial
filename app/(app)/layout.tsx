@@ -19,11 +19,11 @@ const GRUPOS: { titulo: string; itens: Item[]; fluxo?: boolean }[] = [
     { href: "/relatorios", rotulo: "Relatórios",           icone: I("M4 19V5m0 14h16M8 15V9m4 6V7m4 8v-4") },
   ]},
   { titulo: "Fluxo de atendimento", fluxo: true, itens: [
-    { href: "/quadro",       rotulo: "Quadro de atividades", passo: "1 · Entrada — o chamado chega e é triado",
+    { href: "/quadro",       rotulo: "Quadro de atividades", passo: "1 · Triagem — analisa e roteia o chamado",
       icone: I("M4 4h6v16H4zM14 4h6v9h-6z") },
-    { href: "/solicitacoes", rotulo: "Solicitações",         passo: "2 · Conversão — vira Ordem de Serviço",
+    { href: "/solicitacoes", rotulo: "Execução de serviços", passo: "2 · Execução — equipe/contratada resolve",
       icone: I("M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z") },
-    { href: "/ordens",       rotulo: "Ordens de serviço",    passo: "3 · Execução — equipe executa e conclui",
+    { href: "/ordens",       rotulo: "Ordens de serviço",    passo: "3 · Registro — lista auditável de tudo",
       icone: I("M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11") },
   ]},
   { titulo: "Patrimônio", itens: [
